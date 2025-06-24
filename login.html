@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Galería de Prompts</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .login-container {
+            max-width: 400px;
+            width: 100%;
+            padding: 20px;
+        }
+        
+        .card {
+            background-color: #2a2a2a;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card-header {
+            background-color: #3a3a3a;
+            border-bottom: none;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 20px;
+        }
+        
+        .card-body {
+            padding: 30px;
+        }
+        
+        .form-control {
+            background-color: #333;
+            border: 1px solid #444;
+            color: white;
+            padding: 12px;
+        }
+        
+        .form-control:focus {
+            background-color: #3a3a3a;
+            border-color: #666;
+            color: white;
+            box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.1);
+        }
+        
+        .btn-primary {
+            background-color: #5064eb;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            font-weight: bold;
+        }
+        
+        .btn-primary:hover {
+            background-color: #4057db;
+        }
+        
+        .login-title {
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #aaa;
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            color: white;
+        }
+        
+        .alert {
+            display: none;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>    <div class="login-container">
+        <h1 class="login-title">Panel de Administración</h1>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Iniciar Sesión</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info" role="alert" style="display: block; margin-bottom: 20px;">
+                    <strong>Información:</strong> Usuario por defecto: <code>admin</code> | Contraseña: <code>admin123</code>
+                </div>            <div class="card-body">
+                <div class="alert alert-info" role="alert" style="display: block; margin-bottom: 20px;">
+                    <strong>Información:</strong> Usuario por defecto: <code>admin</code> | Contraseña: <code>admin123</code>
+                </div>
+                
+                <div class="alert alert-danger" id="errorAlert" role="alert"></div>
+                
+                <form id="loginForm">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Usuario</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Contraseña</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
+                </form>
+            </div>
+        </div>
+        
+        <a href="/" class="back-link">Volver a la Galería</a>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('loginForm');
+            const errorAlert = document.getElementById('errorAlert');
+            
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                // Validación básica
+                if (!username || !password) {
+                    showError('Por favor, completa todos los campos.');
+                    return;
+                }
+                
+                // Enviar solicitud de inicio de sesión
+                fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showError(data.error);
+                    } else if (data.success && data.redirect) {
+                        window.location.href = data.redirect;
+                    }
+                })
+                .catch(error => {
+                    showError('Error al iniciar sesión. Por favor, intenta de nuevo.');
+                    console.error('Error:', error);
+                });
+            });
+            
+            // Función para mostrar errores
+            function showError(message) {
+                errorAlert.textContent = message;
+                errorAlert.style.display = 'block';
+                
+                // Ocultar después de 5 segundos
+                setTimeout(() => {
+                    errorAlert.style.display = 'none';
+                }, 5000);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "Prompts AI | Galería de Prompts para Inteligencia Artificial",
+  "short_name": "Prompts AI",
+  "description": "Colección curada de los mejores prompts para IA. Encuentra prompts para generar imágenes, textos creativos y más.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4a90e2",
+  "icons": [
+    {
+      "src": "/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

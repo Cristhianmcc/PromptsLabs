@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Galería de Prompts</title>
+    <link rel="stylesheet" href="admin.css">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome para iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Galería de Prompts</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Ver Galería</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/admin">Administración</a>
+                    </li>
+                </ul>                <div class="d-flex">
+                    <a href="/logout" class="btn btn-outline-light">Cerrar Sesión</a>
+                </div>
+            </div>
+        </div>
+    </nav>    <div class="container my-4">
+        <div class="row">
+            <div class="col-12">                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1>Panel de Administración</h1>
+                    <div>
+                        <button id="updateCategoriesBtn" class="btn btn-info me-2">
+                            <i class="fas fa-tags"></i> Actualizar Categorías
+                        </button>
+                        <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                            <i class="fas fa-key"></i> Cambiar Contraseña
+                        </button>
+                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addPromptModal">
+                            <i class="fas fa-plus"></i> Agregar Prompt
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Lista de Prompts</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Imagen</th>
+                                        <th>Prompt</th>
+                                        <th>Fecha</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="promptsTable">
+                                    <!-- Los datos se cargarán dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Agregar Prompt -->
+    <div class="modal fade" id="addPromptModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Agregar Nuevo Prompt</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addPromptForm" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="addPromptText" class="form-label">Descripción del Prompt</label>
+                            <textarea class="form-control" id="addPromptText" name="prompt" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="addPromptImage" class="form-label">Imagen</label>
+                            <input type="file" class="form-control" id="addPromptImage" name="image" accept="image/*" required>
+                        </div>
+                        <div class="mb-3">
+                            <div id="imagePreview" class="mt-2 d-none">
+                                <img src="" alt="Vista previa" class="img-fluid img-thumbnail" style="max-height: 200px;">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="saveNewPrompt">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Editar Prompt -->
+    <div class="modal fade" id="editPromptModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Prompt</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editPromptForm" enctype="multipart/form-data">
+                        <input type="hidden" id="editPromptId" name="id">
+                        <div class="mb-3">
+                            <label for="editPromptText" class="form-label">Descripción del Prompt</label>
+                            <textarea class="form-control" id="editPromptText" name="prompt" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editPromptImage" class="form-label">Imagen Actual</label>
+                            <div class="d-flex align-items-center">
+                                <img id="currentImage" src="" alt="Imagen actual" class="img-thumbnail me-3" style="max-height: 100px;">
+                                <div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="changeImage">
+                                        <label class="form-check-label" for="changeImage">
+                                            Cambiar imagen
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3 d-none" id="newImageContainer">
+                            <label for="editPromptImage" class="form-label">Nueva Imagen</label>
+                            <input type="file" class="form-control" id="editPromptImage" name="image" accept="image/*">
+                            <div id="editImagePreview" class="mt-2 d-none">
+                                <img src="" alt="Vista previa" class="img-fluid img-thumbnail" style="max-height: 200px;">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="saveEditPrompt">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Cambiar Contraseña -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Cambiar Contraseña</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label for="currentPassword" class="form-label">Contraseña Actual</label>
+                            <input type="password" class="form-control" id="currentPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">Nueva Contraseña</label>
+                            <input type="password" class="form-control" id="newPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">Confirmar Nueva Contraseña</label>
+                            <input type="password" class="form-control" id="confirmPassword" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="saveNewPassword">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación para Eliminar -->
+    <div class="modal fade" id="deletePromptModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar Eliminación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Estás seguro de que deseas eliminar este prompt? Esta acción no se puede deshacer.</p>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        La imagen asociada también será eliminada del servidor.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="confirmDelete">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,220 @@
+// Array para almacenar los datos de los prompts cargados desde la API
+let promptsData = [];
+
+// Función para cargar los prompts desde la API
+function loadPromptsFromAPI() {
+  fetch('/api/prompts')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Error al cargar los prompts');
+      }
+      return response.json();
+    })
+    .then(data => {
+      promptsData = data;
+      createGalleryItems();
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      // Mostrar mensaje de error en la interfaz
+      const gallery = document.getElementById("gallery");
+      gallery.innerHTML = `
+        <div class="error-message">
+          <p>Error al cargar las imágenes. Por favor, intenta de nuevo más tarde.</p>
+          <p>Detalles: ${error.message}</p>
+        </div>
+      `;
+    });
+}
+
+let columns = 4
+let columnHeights = []
+let columnWidth = 0
+const gap = 20
+
+// Función para determinar el número de columnas según el ancho de pantalla
+function getColumnCount() {
+  const width = window.innerWidth
+  if (width <= 480) return 1
+  if (width <= 768) return 2
+  if (width <= 1200) return 3
+  return 4
+}
+
+// Función para inicializar las columnas
+function initializeColumns() {
+  columns = getColumnCount()
+  const gallery = document.getElementById("gallery")
+  const containerWidth = gallery.offsetWidth
+  columnWidth = (containerWidth - gap * (columns - 1)) / columns
+  columnHeights = new Array(columns).fill(0)
+}
+
+// Función para crear elementos de la galería
+function createGalleryItems() {
+  const gallery = document.getElementById("gallery")
+  
+  // Limpiar galería existente
+  gallery.innerHTML = '';
+
+  promptsData.forEach((item, index) => {
+    const galleryItem = document.createElement("div")
+    galleryItem.className = "gallery-item"
+    galleryItem.onclick = () => openModal(index)
+
+    const img = document.createElement("img")
+    img.src = item.image
+    img.alt = `Prompt ${index + 1}`
+    img.loading = "lazy"
+
+    // Cuando la imagen carga, posicionarla en el masonry
+    img.onload = () => {
+      positionItem(galleryItem, img)
+    }
+
+    galleryItem.appendChild(img)
+    gallery.appendChild(galleryItem)
+  })
+}
+
+// Función para posicionar un elemento en el layout masonry
+function positionItem(item, img) {
+  // Encontrar la columna más corta
+  const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights))
+
+  // Calcular posición
+  const x = shortestColumnIndex * (columnWidth + gap)
+  const y = columnHeights[shortestColumnIndex]
+
+  // Calcular altura proporcional de la imagen
+  const aspectRatio = img.naturalHeight / img.naturalWidth
+  const itemHeight = columnWidth * aspectRatio
+
+  // Posicionar el elemento
+  item.style.left = `${x}px`
+  item.style.top = `${y}px`
+  item.style.width = `${columnWidth}px`
+
+  // Actualizar la altura de la columna
+  columnHeights[shortestColumnIndex] += itemHeight + gap
+
+  // Actualizar la altura del contenedor
+  const maxHeight = Math.max(...columnHeights)
+  document.getElementById("gallery").style.height = `${maxHeight}px`
+}
+
+// Función para recalcular todo el layout
+function recalculateLayout() {
+  initializeColumns()
+  const items = document.querySelectorAll(".gallery-item")
+
+  items.forEach((item, index) => {
+    const img = item.querySelector("img")
+    if (img.complete) {
+      positionItem(item, img)
+    }
+  })
+}
+
+// Función para abrir el modal
+function openModal(index) {
+  const modal = document.getElementById("modal")
+  const modalImage = document.getElementById("modalImage")
+  const promptText = document.getElementById("promptText")
+
+  modalImage.src = promptsData[index].image
+  promptText.textContent = promptsData[index].prompt
+
+  modal.style.display = "block"
+  document.body.style.overflow = "hidden"
+}
+
+// Función para cerrar el modal
+function closeModal() {
+  const modal = document.getElementById("modal")
+  modal.style.display = "none"
+  document.body.style.overflow = "auto"
+}
+
+// Función para copiar el prompt
+function copyPrompt() {
+  const promptText = document.getElementById("promptText").textContent
+  navigator.clipboard
+    .writeText(promptText)
+    .then(() => {
+      const copyBtn = document.getElementById("copyBtn")
+      const originalText = copyBtn.innerHTML
+
+      copyBtn.innerHTML = "✅ ¡Copiado!"
+      copyBtn.classList.add("copied")
+
+      setTimeout(() => {
+        copyBtn.innerHTML = originalText
+        copyBtn.classList.remove("copied")
+      }, 2500)
+    })
+    .catch((err) => {
+      console.error("Error al copiar: ", err)
+      const copyBtn = document.getElementById("copyBtn")
+      copyBtn.innerHTML = "❌ Error al copiar"
+      setTimeout(() => {
+        copyBtn.innerHTML = "📋 Copiar Prompt"
+      }, 2000)
+    })
+}
+
+// Event listeners
+document.addEventListener("DOMContentLoaded", () => {
+  initializeColumns()
+  
+  // Cargar prompts desde la API
+  loadPromptsFromAPI();
+
+  // Cerrar modal
+  document.getElementById("closeModal").onclick = closeModal
+  document.getElementById("modal").onclick = (e) => {
+    if (e.target.id === "modal") {
+      closeModal()
+    }
+  }
+
+  // Copiar prompt
+  document.getElementById("copyBtn").onclick = copyPrompt
+
+  // Cerrar modal con ESC
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeModal()
+    }
+  })
+
+  // Recalcular layout cuando cambie el tamaño de ventana
+  let resizeTimeout
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimeout)
+    resizeTimeout = setTimeout(() => {
+      recalculateLayout()
+    }, 250)
+  })
+
+  // Funcionalidad de búsqueda
+  const searchInput = document.querySelector(".search-input")
+  searchInput.addEventListener("input", (e) => {
+    const searchTerm = e.target.value.toLowerCase()
+    const galleryItems = document.querySelectorAll(".gallery-item")
+
+    galleryItems.forEach((item, index) => {
+      const prompt = promptsData[index].prompt.toLowerCase()
+      if (prompt.includes(searchTerm)) {
+        item.style.display = "block"
+      } else {
+        item.style.display = "none"
+      }
+    })
+
+    // Recalcular layout después de filtrar
+    setTimeout(() => {
+      recalculateLayout()
+    }, 100)
+  })
+})
