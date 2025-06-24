@@ -30,8 +30,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Configurar rutas de almacenamiento para desarrollo y producción
 const isProd = process.env.NODE_ENV === 'production';
-const dbPath = isProd ? '/data/prompts.db' : './prompts.db';
-const uploadsDir = isProd ? '/data/images/' : './images/';
+// En producción, usar directorios dentro de la carpeta del proyecto en lugar de la raíz
+const dbPath = isProd ? path.join(__dirname, 'data', 'prompts.db') : './prompts.db';
+const uploadsDir = isProd ? path.join(__dirname, 'data', 'images') : './images/';
 
 // Asegurar que las rutas tengan el formato correcto para path.join
 const cleanUploadsDir = uploadsDir.replace(/^\.\/|^\//, '');
@@ -59,8 +60,21 @@ app.get('/', (req, res) => {
 });
 
 // Asegurar que el directorio de imágenes exista
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
+try {
+    // Primero, asegurar que el directorio data exista si estamos en producción
+    if (isProd && !fs.existsSync(path.join(__dirname, 'data'))) {
+        fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+        console.log('Directorio data creado correctamente');
+    }
+    
+    // Luego crear el directorio de imágenes si no existe
+    if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+        console.log(`Directorio de imágenes ${uploadsDir} creado correctamente`);
+    }
+} catch (error) {
+    console.error(`Error al crear directorios: ${error.message}`);
+    // No detener la aplicación, seguir adelante aunque no se puedan crear los directorios
 }
 
 // Configurar multer para la carga de imágenes
@@ -87,9 +101,25 @@ const upload = multer({
 });
 
 // Conectar a la base de datos SQLite
+// Asegurar que el directorio de la base de datos exista
+try {
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+        console.log(`Directorio para la base de datos ${dbDir} creado correctamente`);
+    }
+} catch (error) {
+    console.error(`Error al crear directorio para la base de datos: ${error.message}`);
+}
+
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error al conectar a la base de datos', err.message);
+        // En producción, intentar usar SQLite en memoria si falla la conexión al archivo
+        if (isProd) {
+            console.log('Intentando usar SQLite en memoria...');
+            return new sqlite3.Database(':memory:');
+        }
     } else {
         console.log(`Conectado a la base de datos SQLite en ${dbPath}`);
         
