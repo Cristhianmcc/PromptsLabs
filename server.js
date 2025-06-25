@@ -452,10 +452,15 @@ app.get('/api/categories', (req, res) => {
 
 // API Routes para administración (protegidas por autenticación)
 app.post('/api/prompts', isAuthenticated, upload.single('image'), (req, res) => {
+    console.log('Recibida petición para crear nuevo prompt');
+    console.log('Body:', req.body);
+    console.log('Archivo:', req.file);
+    
     const { prompt, categories } = req.body;
     const imagePath = req.file ? req.file.filename : null;
     
     if (!prompt || !imagePath) {
+        console.error('Faltan campos obligatorios:', { prompt: !!prompt, imagePath: !!imagePath });
         return res.status(400).json({ success: false, message: 'Prompt e imagen son requeridos' });
     }
     
@@ -519,14 +524,40 @@ app.post('/api/prompts', isAuthenticated, upload.single('image'), (req, res) => 
                         return Promise.all(relPromises);
                     })
                     .then(() => {
-                        res.json({ success: true, message: 'Prompt guardado correctamente', promptId });
+                        // Enviar respuesta con información completa del prompt creado
+                        const result = {
+                            success: true, 
+                            message: 'Prompt guardado correctamente',
+                            prompt: {
+                                id: promptId,
+                                prompt: prompt,
+                                image: `/images/${imagePath}`,
+                                categories: categoriesArray || [],
+                                created_at: new Date().toISOString()
+                            }
+                        };
+                        console.log('Enviando respuesta:', result);
+                        res.json(result);
                     })
                     .catch(error => {
                         console.error('Error al procesar categorías:', error);
-                        res.status(500).json({ success: false, message: 'Error al procesar categorías' });
+                        res.status(500).json({ success: false, message: 'Error al procesar categorías: ' + error.message });
                     });
             } else {
-                res.json({ success: true, message: 'Prompt guardado correctamente', promptId });
+                // Enviar respuesta con información completa del prompt creado
+                const result = {
+                    success: true, 
+                    message: 'Prompt guardado correctamente',
+                    prompt: {
+                        id: promptId,
+                        prompt: prompt,
+                        image: `/images/${imagePath}`,
+                        categories: [],
+                        created_at: new Date().toISOString()
+                    }
+                };
+                console.log('Enviando respuesta:', result);
+                res.json(result);
             }
         }
     );

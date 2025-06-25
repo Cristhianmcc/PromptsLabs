@@ -5,7 +5,13 @@ document.addEventListener('DOMContentLoaded', function() {
     let deletePromptId = null;
     
     // Elementos DOM
-    const promptsTable = document.getElementById('promptsTable');
+    const promptsTable = document.getElementById('pr        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert(`Error al guardar el prompt: ${error.message}. Revise la consola para más detalles.`, 'danger');
+            // Eliminar spinner
+            document.body.removeChild(spinner);
+        });ble');
     const addPromptForm = document.getElementById('addPromptForm');
     const editPromptForm = document.getElementById('editPromptForm');
     const saveNewPromptBtn = document.getElementById('saveNewPrompt');
@@ -210,17 +216,40 @@ document.addEventListener('DOMContentLoaded', function() {
         const spinner = createSpinner();
         document.body.appendChild(spinner);
         
+        console.log('Enviando datos del nuevo prompt:', {
+            prompt: formData.get('prompt'),
+            imageFileName: formData.get('image').name,
+            imageSize: formData.get('image').size,
+            imageType: formData.get('image').type
+        });
+        
         fetch('/api/prompts', {
             method: 'POST',
             body: formData
         })
         .then(response => {
-            if (!response.ok) {
-                throw new Error('Error al guardar el prompt');
-            }
-            return response.json();
+            console.log('Respuesta recibida:', response.status, response.statusText);
+            
+            // Primero intentar obtener el texto de la respuesta para depurar
+            return response.text().then(text => {
+                console.log('Respuesta como texto:', text);
+                
+                if (!response.ok) {
+                    throw new Error(`Error al guardar el prompt: ${response.status} ${response.statusText}`);
+                }
+                
+                // Si llegamos aquí, intentar parsear como JSON
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Error al parsear JSON:', e);
+                    throw new Error(`Error al parsear respuesta: ${e.message}`);
+                }
+            });
         })
         .then(data => {
+            console.log('Datos de respuesta:', data);
+            
             // Cerrar modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('addPromptModal'));
             modal.hide();
@@ -240,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Error:', error);
-            showAlert('Error al guardar el prompt. ' + error.message, 'danger');
+            showAlert(`Error al guardar el prompt: ${error.message}. Revise la consola para más detalles.`, 'danger');
             // Eliminar spinner
             document.body.removeChild(spinner);
         });
