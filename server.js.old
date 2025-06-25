@@ -28,40 +28,30 @@ app.use(session({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Configurar rutas de almacenamiento
-// Siempre usar la base de datos en /data que contiene los prompts
-const isProd = true; // Forzar el uso del directorio data
-const dbPath = path.join(__dirname, 'data', 'prompts.db');
-const uploadsDir = path.join(__dirname, 'data', 'images');
+// Configurar rutas de almacenamiento para desarrollo y producción
+const isProd = process.env.NODE_ENV === 'production';
+// En producción, usar directorios dentro de la carpeta del proyecto en lugar de la raíz
+const dbPath = isProd ? path.join(__dirname, 'data', 'prompts.db') : './prompts.db';
+const uploadsDir = isProd ? path.join(__dirname, 'data', 'images') : './images/';
 
-// Configurar rutas de acceso
-console.log("Directorio de imágenes:", uploadsDir);
+// Asegurar que las rutas tengan el formato correcto para path.join
+const cleanUploadsDir = uploadsDir.replace(/^\.\/|^\//, '');
+
+console.log("Directorio de imágenes:", path.join(__dirname, cleanUploadsDir));
 
 // Servir archivos estáticos y configurar rutas explícitamente
 app.use(express.static(path.join(__dirname, '/')));
 
-// Configurar múltiples rutas para servir imágenes
-// 1. Primero buscar en data/images (donde están los datos reales)
-app.use('/images', express.static(uploadsDir, {
-  fallthrough: true
-}));
-
-// 2. Si no se encuentra, buscar en el directorio /images en la raíz
-app.use('/images', express.static(path.join(__dirname, 'images'), {
-  fallthrough: true
+// Ruta específica para servir imágenes desde el directorio de uploads
+app.use('/images', express.static(path.join(__dirname, cleanUploadsDir), {
+  fallthrough: true // Permite continuar a las siguientes rutas si el archivo no se encuentra
 }));
 
 // Middleware para manejar fallbacks de imágenes
 app.get('/images/:imageName', (req, res) => {
   // Si llegamos aquí, significa que la imagen solicitada no existe
   console.log(`Imagen no encontrada: ${req.params.imageName}, sirviendo placeholder`);
-  // Intentar con el placeholder en data/images primero
-  const dataPlaceholder = path.join(uploadsDir, 'placeholder.jpg');
-  if (fs.existsSync(dataPlaceholder)) {
-    return res.sendFile(dataPlaceholder);
-  }
-  // Si no existe, usar el placeholder en /images
-  res.sendFile(path.join(__dirname, 'images', 'placeholder.jpg'));
+  res.sendFile(path.join(__dirname, cleanUploadsDir, 'placeholder.jpg'));
 });
 
 // Rutas explícitas para archivos HTML para mayor claridad
