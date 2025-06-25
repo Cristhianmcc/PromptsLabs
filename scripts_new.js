@@ -117,21 +117,22 @@ function ensureCorrectImagePath(imagePath) {
     return processedPath
   }
   
-  // Eliminar las barras iniciales si existen para normalizar
-  if (processedPath.startsWith('/')) {
-    processedPath = processedPath.substring(1)
-    console.log(`Eliminando barra inicial: ${processedPath}`)
-  }
-  
-  // Si ya tiene 'images/' al inicio, asegurarse de que no tenga barras duplicadas
-  if (processedPath.startsWith('images/')) {
-    console.log(`Ruta ya tiene prefijo images/: ${processedPath}`)
+  // Si ya viene con la ruta correcta desde el servidor (/images/...), usarla directamente
+  if (processedPath.startsWith('/images/')) {
+    console.log(`Ruta correcta del servidor: ${processedPath}`)
     return processedPath
   }
   
-  // Para cualquier otro caso, añadir el prefijo 'images/'
-  const finalPath = `images/${processedPath}`
-  console.log(`Ruta final: ${finalPath}`)
+  // Si ya tiene 'images/' al inicio (sin barra), agregarle la barra
+  if (processedPath.startsWith('images/')) {
+    const finalPath = `/${processedPath}`
+    console.log(`Agregando barra inicial: ${finalPath}`)
+    return finalPath
+  }
+  
+  // Para cualquier otro caso, añadir el prefijo '/images/'
+  const finalPath = `/images/${processedPath}`
+  console.log(`Ruta final normalizada: ${finalPath}`)
   return finalPath
 }
 

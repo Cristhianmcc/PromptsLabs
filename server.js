@@ -358,7 +358,7 @@ app.get('/api/prompts', (req, res) => {
     const category = req.query.category;
     
     let query = `
-        SELECT p.id, p.image, p.prompt, GROUP_CONCAT(c.name) as categories
+        SELECT p.id, p.image, p.prompt, p.created_at, GROUP_CONCAT(c.name) as categories
         FROM prompts p
         LEFT JOIN prompt_categories pc ON p.id = pc.prompt_id
         LEFT JOIN categories c ON pc.category_id = c.id
@@ -381,15 +381,60 @@ app.get('/api/prompts', (req, res) => {
         
         // Procesar los resultados para convertir la cadena de categorías en un array
         const results = rows.map(row => {
+            // Procesar la imagen para asegurarse de que tiene la ruta correcta
+            let imagePath = row.image;
+            if (imagePath && !imagePath.startsWith('http') && !imagePath.startsWith('/')) {
+                imagePath = `/images/${imagePath}`;
+            }
+            
             return {
                 id: row.id,
-                image: row.image,
+                image: imagePath,
                 prompt: row.prompt,
+                created_at: row.created_at,
                 categories: row.categories ? row.categories.split(',') : []
             };
         });
         
         res.json(results);
+    });
+});
+
+// Ruta para obtener un prompt específico por ID
+app.get('/api/prompts/:id', (req, res) => {
+    db.get(`
+        SELECT p.id, p.image, p.prompt, p.created_at, GROUP_CONCAT(c.name) as categories
+        FROM prompts p
+        LEFT JOIN prompt_categories pc ON p.id = pc.prompt_id
+        LEFT JOIN categories c ON pc.category_id = c.id
+        WHERE p.id = ?
+        GROUP BY p.id
+    `, [req.params.id], (err, row) => {
+        if (err) {
+            console.error('Error al obtener prompt:', err.message);
+            return res.status(500).json({ success: false, message: 'Error al obtener prompt' });
+        }
+        
+        if (!row) {
+            return res.status(404).json({ success: false, message: 'Prompt no encontrado' });
+        }
+        
+        // Procesar la imagen para asegurarse de que tiene la ruta correcta
+        let imagePath = row.image;
+        if (imagePath && !imagePath.startsWith('http') && !imagePath.startsWith('/')) {
+            imagePath = `/images/${imagePath}`;
+        }
+        
+        // Procesar el resultado
+        const result = {
+            id: row.id,
+            image: imagePath,
+            prompt: row.prompt,
+            created_at: row.created_at,
+            categories: row.categories ? row.categories.split(',') : []
+        };
+        
+        res.json(result);
     });
 });
 
