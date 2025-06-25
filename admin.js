@@ -85,6 +85,42 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
+    // Función para asegurar que la ruta de la imagen sea correcta
+    function ensureCorrectImagePath(imagePath) {
+        // Si no hay ruta de imagen o está vacía, usar placeholder
+        if (!imagePath || imagePath.trim() === '') {
+            console.log("No hay ruta de imagen, usando placeholder");
+            return '/images/placeholder.jpg';
+        }
+        
+        let processedPath = imagePath;
+        console.log(`Procesando ruta de imagen: "${processedPath}"`);
+        
+        // Si ya tiene la ruta completa con http, devolverla
+        if (processedPath.startsWith('http')) {
+            console.log(`Ruta externa (http): ${processedPath}`);
+            return processedPath;
+        }
+        
+        // Si ya viene con la ruta correcta desde el servidor (/images/...), usarla directamente
+        if (processedPath.startsWith('/images/')) {
+            console.log(`Ruta correcta del servidor: ${processedPath}`);
+            return processedPath;
+        }
+        
+        // Si ya tiene 'images/' al inicio (sin barra), agregarle la barra
+        if (processedPath.startsWith('images/')) {
+            const finalPath = `/${processedPath}`;
+            console.log(`Agregando barra inicial: ${finalPath}`);
+            return finalPath;
+        }
+        
+        // Para cualquier otro caso, añadir el prefijo '/images/'
+        const finalPath = `/images/${processedPath}`;
+        console.log(`Ruta final normalizada: ${finalPath}`);
+        return finalPath;
+    }
+    
     // Renderizar tabla de prompts
     function renderPromptTable(prompts) {
         promptsTable.innerHTML = '';
@@ -107,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             row.innerHTML = `
                 <td>${prompt.id}</td>
-                <td><img src="${prompt.image}" alt="Imagen" class="img-thumbnail"></td>
+                <td><img src="${ensureCorrectImagePath(prompt.image)}" alt="Imagen" class="img-thumbnail"></td>
                 <td>
                     <div class="prompt-text" title="${prompt.prompt}">
                         ${prompt.prompt}
@@ -176,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(prompt => {
                 document.getElementById('editPromptId').value = prompt.id;
                 document.getElementById('editPromptText').value = prompt.prompt;
-                document.getElementById('currentImage').src = prompt.image;
+                document.getElementById('currentImage').src = ensureCorrectImagePath(prompt.image);
                 
                 // Resetear el checkbox y el contenedor de nueva imagen
                 changeImageCheckbox.checked = false;

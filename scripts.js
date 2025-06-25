@@ -4,6 +4,7 @@ let activeFilters = new Set(); // Para almacenar categorías filtradas activas
 
 // Función para cargar los prompts desde la API
 function loadPromptsFromAPI() {
+  console.log('Cargando prompts desde API...');
   fetch('/api/prompts')
     .then(response => {
       if (!response.ok) {
@@ -14,6 +15,13 @@ function loadPromptsFromAPI() {
     .then(data => {
       promptsData = data;
       console.log(`Prompts cargados: ${data.length}`);
+      
+      // Verificar los datos recibidos
+      if (data.length > 0) {
+        console.log('Ejemplo de primer prompt:', JSON.stringify(data[0]));
+      } else {
+        console.warn('No se recibieron prompts de la API');
+      }
       
       // Primero inicializar las columnas
       initializeColumns();
@@ -250,46 +258,37 @@ function createGalleryItem(item, index) {
 
 // Función para asegurar que la ruta de la imagen sea correcta
 function ensureCorrectImagePath(imagePath) {
-  // Si no hay ruta de imagen o está vacía, usar un valor seguro
+  // Si no hay ruta de imagen o está vacía, usar placeholder
   if (!imagePath || imagePath.trim() === '') {
     console.log("No hay ruta de imagen, usando placeholder");
-    return 'images/placeholder.jpg';
+    return '/images/placeholder.jpg';
   }
   
   let processedPath = imagePath;
-  console.log(`Procesando ruta de imagen: ${imagePath}`);
+  console.log(`Procesando ruta de imagen: "${processedPath}"`);
   
   // Si ya tiene la ruta completa con http, devolverla
   if (processedPath.startsWith('http')) {
+    console.log(`Ruta externa (http): ${processedPath}`);
     return processedPath;
   }
   
-  // Manejar distintos formatos de rutas
-  if (processedPath.includes('\\')) {
-    // Convertir rutas con backslash a forward slash
-    processedPath = processedPath.replace(/\\/g, '/');
-    console.log(`Ruta corregida (backslash): ${processedPath}`);
+  // Si ya viene con la ruta correcta desde el servidor (/images/...), usarla directamente
+  if (processedPath.startsWith('/images/')) {
+    console.log(`Ruta correcta del servidor: ${processedPath}`);
+    return processedPath;
   }
   
-  // Extraer solo el nombre del archivo si es una ruta completa
-  if (processedPath.includes('/images/')) {
-    processedPath = processedPath.substring(processedPath.lastIndexOf('/images/') + 8);
-    console.log(`Extraído nombre de archivo: ${processedPath}`);
-  }
-  
-  // Eliminar las barras iniciales si existen para normalizar
-  if (processedPath.startsWith('/')) {
-    processedPath = processedPath.substring(1);
-  }
-  
-  // Si ya tiene 'images/' al inicio, devolverla normalizada
+  // Si ya tiene 'images/' al inicio (sin barra), agregarle la barra
   if (processedPath.startsWith('images/')) {
-    return processedPath;
+    const finalPath = `/${processedPath}`;
+    console.log(`Agregando barra inicial: ${finalPath}`);
+    return finalPath;
   }
   
-  // Para cualquier otro caso, añadir el prefijo 'images/'
-  const finalPath = `images/${processedPath}`;
-  console.log(`Ruta final de imagen: ${finalPath}`);
+  // Para cualquier otro caso, añadir el prefijo '/images/'
+  const finalPath = `/images/${processedPath}`;
+  console.log(`Ruta final normalizada: ${finalPath}`);
   return finalPath;
 }
 
