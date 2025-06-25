@@ -286,6 +286,20 @@ function ensureCorrectImagePath(imagePath) {
     return finalPath;
   }
   
+  // Verificar si es solo un nombre de archivo (sin directorios)
+  if (!processedPath.includes('/') && !processedPath.includes('\\')) {
+    const finalPath = `/images/${processedPath}`;
+    console.log(`Nombre de archivo simple, añadiendo directorio: ${finalPath}`);
+    return finalPath;
+  }
+  
+  // Verificar si es una ruta relativa de data/images
+  if (processedPath.startsWith('data/images/')) {
+    const finalPath = `/${processedPath.substring(5)}`; // Quitar 'data/' del inicio
+    console.log(`Convertida ruta data/images a /images: ${finalPath}`);
+    return finalPath;
+  }
+  
   // Para cualquier otro caso, añadir el prefijo '/images/'
   const finalPath = `/images/${processedPath}`;
   console.log(`Ruta final normalizada: ${finalPath}`);

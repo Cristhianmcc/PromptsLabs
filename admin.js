@@ -115,6 +115,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return finalPath;
         }
         
+        // Verificar si es solo un nombre de archivo (sin directorios)
+        if (!processedPath.includes('/') && !processedPath.includes('\\')) {
+            const finalPath = `/images/${processedPath}`;
+            console.log(`Nombre de archivo simple, añadiendo directorio: ${finalPath}`);
+            return finalPath;
+        }
+        
         // Para cualquier otro caso, añadir el prefijo '/images/'
         const finalPath = `/images/${processedPath}`;
         console.log(`Ruta final normalizada: ${finalPath}`);
