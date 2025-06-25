@@ -63,18 +63,55 @@ function createGalleryItems() {
     galleryItem.onclick = () => openModal(index)
 
     const img = document.createElement("img")
-    img.src = item.image
-    img.alt = `Prompt ${index + 1}`
+    // Asegurar que la ruta de la imagen sea correcta
+    img.src = ensureCorrectImagePath(item.image)
+    img.alt = item.prompt ? `${item.prompt.substring(0, 30)}...` : `Prompt ${index + 1}`
     img.loading = "lazy"
 
     // Cuando la imagen carga, posicionarla en el masonry
     img.onload = () => {
       positionItem(galleryItem, img)
     }
+    
+    // Manejar errores de carga de imagen
+    img.onerror = () => {
+      console.error(`Error al cargar imagen: ${img.src}`)
+      img.src = '/images/placeholder.jpg'
+      positionItem(galleryItem, img)
+    }
 
     galleryItem.appendChild(img)
     gallery.appendChild(galleryItem)
   })
+}
+
+// Función para asegurar que la ruta de la imagen sea correcta
+function ensureCorrectImagePath(imagePath) {
+  // Si no hay ruta de imagen o está vacía, usar placeholder
+  if (!imagePath || imagePath.trim() === '') {
+    console.log("No hay ruta de imagen, usando placeholder")
+    return '/images/placeholder.jpg'
+  }
+  
+  let processedPath = imagePath
+  
+  // Si ya tiene la ruta completa con http, devolverla
+  if (processedPath.startsWith('http')) {
+    return processedPath
+  }
+  
+  // Eliminar las barras iniciales si existen para normalizar
+  if (processedPath.startsWith('/')) {
+    processedPath = processedPath.substring(1)
+  }
+  
+  // Si ya tiene 'images/' al inicio, asegurarse de que no tenga barras duplicadas
+  if (processedPath.startsWith('images/')) {
+    return processedPath
+  }
+  
+  // Para cualquier otro caso, añadir el prefijo 'images/'
+  return `images/${processedPath}`
 }
 
 // Función para posicionar un elemento en el layout masonry
@@ -121,9 +158,25 @@ function openModal(index) {
   const modal = document.getElementById("modal")
   const modalImage = document.getElementById("modalImage")
   const promptText = document.getElementById("promptText")
+  const promptTitle = document.getElementById("promptTitle")
+  const promptCategory = document.getElementById("promptCategory")
 
-  modalImage.src = promptsData[index].image
+  // Usar la función para normalizar la ruta de la imagen
+  modalImage.src = ensureCorrectImagePath(promptsData[index].image)
   promptText.textContent = promptsData[index].prompt
+
+  // Añadir título descriptivo basado en el contenido del prompt
+  const shortPrompt = promptsData[index].prompt.substring(0, 40)
+  promptTitle.textContent = `✨ ${shortPrompt}...`
+  
+  // Mostrar categoría si existe
+  if (promptsData[index].categories && promptsData[index].categories.length > 0) {
+    promptCategory.textContent = promptsData[index].categories[0]
+    promptCategory.style.display = 'inline-block'
+  } else {
+    promptCategory.textContent = 'General'
+    promptCategory.style.display = 'inline-block'
+  }
 
   modal.style.display = "block"
   document.body.style.overflow = "hidden"

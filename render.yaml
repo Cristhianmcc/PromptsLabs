@@ -11,6 +11,6 @@ services:
       - key: PORT
         value: 10000
     disk:
-      name: data
+      name: promptslabs-data
       mountPath: /opt/render/project/src/data
       sizeGB: 1
