@@ -123,7 +123,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     } else {
         console.log(`Conectado a la base de datos SQLite en ${dbPath}`);
         
-        // Crear tablas si no existen
+        // Crear tablas si no existen - asegurarse de que todas las tablas se creen antes de importar datos
         db.serialize(() => {
             // Tabla de prompts
             db.run(`CREATE TABLE IF NOT EXISTS prompts (
@@ -136,15 +136,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     console.error('Error al crear la tabla prompts', err.message);
                 } else {
                     console.log('Tabla prompts creada o ya existente');
-                    // Verificar si hay datos en la tabla
-                    db.get("SELECT COUNT(*) as count FROM prompts", [], (err, row) => {
-                        if (err) {
-                            console.error('Error al contar registros', err.message);
-                        } else if (row.count === 0) {
-                            // Importar datos iniciales si la tabla está vacía
-                            importInitialData();
-                        }
-                    });
                 }
             });
             
@@ -201,6 +192,19 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     });
                 }
             });
+
+            // Ahora que todas las tablas están creadas, verificar si hay datos en prompts
+            // y cargar datos iniciales si es necesario
+            db.get("SELECT COUNT(*) as count FROM prompts", [], (err, row) => {
+                if (err) {
+                    console.error('Error al contar registros de prompts', err.message);
+                } else if (row.count === 0) {
+                    // Importar datos iniciales si la tabla está vacía
+                    importInitialData();
+                } else {
+                    console.log(`Base de datos ya contiene ${row.count} prompts. No se importarán datos de ejemplo.`);
+                }
+            });
         });
     }
 });
@@ -239,62 +243,183 @@ function importInitialData() {
         if (defaultPrompts && Array.isArray(defaultPrompts) && defaultPrompts.length > 0) {
             console.log(`Cargando ${defaultPrompts.length} prompts desde defaultData.js`);
             
-            // Crear un conjunto de categorías únicas
-            const uniqueCategories = new Set();
-            defaultPrompts.forEach(item => {
-                if (item.categories && Array.isArray(item.categories)) {
-                    item.categories.forEach(cat => uniqueCategories.add(cat.trim()));
-                }
-            });
-            
-            // Insertar categorías en la tabla de categorías
-            const categoryInsertStmt = db.prepare("INSERT OR IGNORE INTO categories (name, slug, description) VALUES (?, ?, ?)");
-            uniqueCategories.forEach(category => {
-                const slug = category.toLowerCase()
-                    .replace(/\s+/g, '-')
-                    .replace(/[^\w\-]+/g, '')
-                    .replace(/\-\-+/g, '-');
-                categoryInsertStmt.run(category, slug, `Prompts de la categoría ${category}`);
-            });
-            categoryInsertStmt.finalize();
-            
-            // Insertar prompts y sus relaciones con categorías
+            // Asegurarse de que todas las tablas existen antes de continuar
             db.serialize(() => {
-                // Insertar cada prompt
-                defaultPrompts.forEach(item => {
-                    // Asegurarse de que las rutas de imágenes sean correctas (sin /image/ al inicio)
-                    const imagePath = item.image.startsWith('/images/') ? 
-                        item.image.substring(8) : // Quitar '/images/' del inicio
-                        item.image;
-                    
-                    db.run("INSERT INTO prompts (image, prompt) VALUES (?, ?)", 
-                        [imagePath, item.prompt], 
-                        function(err) {
+                // Primero verificar que la tabla categories existe
+                db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='categories'", [], (err, row) => {
+                    if (err || !row) {
+                        console.error("La tabla categories no existe todavía. Intentando crearla nuevamente.");
+                        // Crear la tabla si no existe
+                        db.run(`CREATE TABLE IF NOT EXISTS categories (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT UNIQUE NOT NULL,
+                            slug TEXT UNIQUE NOT NULL,
+                            description TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )`, (err) => {
                             if (err) {
-                                console.error('Error al insertar prompt:', err.message);
+                                console.error('Error al crear la tabla categories:', err.message);
                                 return;
                             }
-                            
-                            const promptId = this.lastID;
-                            
-                            // Si el prompt tiene categorías, crear las relaciones
-                            if (item.categories && Array.isArray(item.categories)) {
-                                const relStmt = db.prepare("INSERT INTO prompt_categories (prompt_id, category_id) VALUES (?, (SELECT id FROM categories WHERE name = ?))");
-                                
-                                item.categories.forEach(category => {
-                                    relStmt.run(promptId, category.trim(), err => {
-                                        if (err) console.error(`Error al relacionar prompt ${promptId} con categoría ${category}:`, err.message);
-                                    });
-                                });
-                                
-                                relStmt.finalize();
-                            }
-                        }
-                    );
+                            // Continuar con la importación
+                            continueImport();
+                        });
+                    } else {
+                        // La tabla existe, continuar con la importación
+                        continueImport();
+                    }
                 });
+                
+                // Función para continuar con la importación después de verificar tablas
+                function continueImport() {
+                    // Crear un conjunto de categorías únicas
+                    const uniqueCategories = new Set();
+                    defaultPrompts.forEach(item => {
+                        if (item.categories && Array.isArray(item.categories)) {
+                            item.categories.forEach(cat => uniqueCategories.add(cat.trim()));
+                        }
+                    });
+                    
+                    // Convertir Set a Array para facilitar el procesamiento
+                    const categoriesArray = Array.from(uniqueCategories);
+                    console.log(`Procesando ${categoriesArray.length} categorías únicas`);
+                    
+                    // Insertar todas las categorías primero, y luego los prompts
+                    const insertCategories = () => {
+                        return new Promise((resolve, reject) => {
+                            db.serialize(() => {
+                                const stmt = db.prepare("INSERT OR IGNORE INTO categories (name, slug, description) VALUES (?, ?, ?)");
+                                
+                                try {
+                                    categoriesArray.forEach(category => {
+                                        const slug = category.toLowerCase()
+                                            .replace(/\s+/g, '-')
+                                            .replace(/[^\w\-]+/g, '')
+                                            .replace(/\-\-+/g, '-');
+                                        stmt.run(category, slug, `Prompts de la categoría ${category}`);
+                                    });
+                                    stmt.finalize(err => {
+                                        if (err) {
+                                            console.error('Error al finalizar inserción de categorías:', err);
+                                            reject(err);
+                                        } else {
+                                            console.log('Categorías insertadas correctamente');
+                                            resolve();
+                                        }
+                                    });
+                                } catch (error) {
+                                    console.error('Error durante inserción de categorías:', error);
+                                    stmt.finalize();
+                                    reject(error);
+                                }
+                            });
+                        });
+                    };
+                    
+                    // Insertar prompts después de que las categorías estén insertadas
+                    insertCategories()
+                        .then(() => {
+                            // Verificar que la tabla prompt_categories existe
+                            return new Promise((resolve, reject) => {
+                                db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='prompt_categories'", [], (err, row) => {
+                                    if (err) {
+                                        reject(err);
+                                    } else if (!row) {
+                                        console.error("La tabla prompt_categories no existe todavía. Intentando crearla nuevamente.");
+                                        db.run(`CREATE TABLE IF NOT EXISTS prompt_categories (
+                                            prompt_id INTEGER,
+                                            category_id INTEGER,
+                                            PRIMARY KEY (prompt_id, category_id),
+                                            FOREIGN KEY (prompt_id) REFERENCES prompts(id),
+                                            FOREIGN KEY (category_id) REFERENCES categories(id)
+                                        )`, (err) => {
+                                            if (err) {
+                                                reject(err);
+                                            } else {
+                                                resolve();
+                                            }
+                                        });
+                                    } else {
+                                        resolve();
+                                    }
+                                });
+                            });
+                        })
+                        .then(() => {
+                            // Ahora insertar los prompts y sus relaciones
+                            db.serialize(() => {
+                                let processedCount = 0;
+                                
+                                defaultPrompts.forEach((item, index) => {
+                                    // Asegurarse de que las rutas de imágenes sean correctas (sin /image/ al inicio)
+                                    const imagePath = item.image.startsWith('/images/') ? 
+                                        item.image.substring(8) : // Quitar '/images/' del inicio
+                                        item.image;
+                                    
+                                    db.run("INSERT INTO prompts (image, prompt) VALUES (?, ?)", 
+                                        [imagePath, item.prompt], 
+                                        function(err) {
+                                            if (err) {
+                                                console.error(`Error al insertar prompt ${index}:`, err.message);
+                                                return;
+                                            }
+                                            
+                                            const promptId = this.lastID;
+                                            
+                                            // Si el prompt tiene categorías, crear las relaciones
+                                            if (item.categories && Array.isArray(item.categories) && item.categories.length > 0) {
+                                                const promises = [];
+                                                
+                                                item.categories.forEach(category => {
+                                                    const promise = new Promise((resolve) => {
+                                                        // Primero obtener el ID de la categoría
+                                                        db.get("SELECT id FROM categories WHERE name = ?", [category.trim()], (err, row) => {
+                                                            if (err || !row) {
+                                                                console.error(`No se encontró la categoría "${category.trim()}" o error:`, err?.message);
+                                                                resolve();
+                                                                return;
+                                                            }
+                                                            
+                                                            const categoryId = row.id;
+                                                            
+                                                            // Insertar la relación
+                                                            db.run("INSERT OR IGNORE INTO prompt_categories (prompt_id, category_id) VALUES (?, ?)",
+                                                                [promptId, categoryId],
+                                                                (err) => {
+                                                                    if (err) {
+                                                                        console.error(`Error al relacionar prompt ${promptId} con categoría ${category}:`, err.message);
+                                                                    }
+                                                                    resolve();
+                                                                }
+                                                            );
+                                                        });
+                                                    });
+                                                    
+                                                    promises.push(promise);
+                                                });
+                                                
+                                                Promise.all(promises).then(() => {
+                                                    processedCount++;
+                                                    if (processedCount === defaultPrompts.length) {
+                                                        console.log('Datos iniciales importados correctamente desde defaultData.js');
+                                                    }
+                                                });
+                                            } else {
+                                                processedCount++;
+                                                if (processedCount === defaultPrompts.length) {
+                                                    console.log('Datos iniciales importados correctamente desde defaultData.js');
+                                                }
+                                            }
+                                        }
+                                    );
+                                });
+                            });
+                        })
+                        .catch(error => {
+                            console.error('Error durante el proceso de importación:', error);
+                        });
+                }
             });
-            
-            console.log('Datos iniciales importados correctamente desde defaultData.js');
         } else {
             console.error('No se encontraron prompts válidos en defaultData.js');
         }

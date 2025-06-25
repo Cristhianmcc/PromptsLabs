@@ -10,7 +10,12 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: DB_INITIALIZE_RETRY
+        value: "true"
     disk:
       name: promptslabs-data
       mountPath: /opt/render/project/src/data
       sizeGB: 1
+    autoDeploy: true
+    # Plan de recuperación: si el servicio falla al inicio, se puede ejecutar
+    # el script emergency_recovery.sh manualmente desde la consola SSH
