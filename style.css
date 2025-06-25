@@ -250,7 +250,6 @@ body {
   min-height: 300px;
   width: 100%;
   max-width: 1400px;
-  will-change: height;
   transition: height 0.3s ease;
 }
 
@@ -263,7 +262,6 @@ body {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   opacity: 0;
   animation: fadeIn 0.5s forwards;
-  will-change: transform, opacity;
 }
 
 .gallery-item:hover {

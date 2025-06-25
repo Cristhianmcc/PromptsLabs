@@ -3,6 +3,7 @@ let promptsData = [];
 
 // Función para cargar los prompts desde la API
 function loadPromptsFromAPI() {
+  console.log('Cargando prompts desde API...');
   fetch('/api/prompts')
     .then(response => {
       if (!response.ok) {
@@ -11,6 +12,13 @@ function loadPromptsFromAPI() {
       return response.json();
     })
     .then(data => {
+      console.log(`Recibidos ${data.length} prompts desde la API`);
+      
+      // Verificar los datos recibidos
+      if (data.length > 0) {
+        console.log('Ejemplo de primer prompt:', JSON.stringify(data[0]));
+      }
+      
       promptsData = data;
       createGalleryItems();
     })
@@ -22,9 +30,16 @@ function loadPromptsFromAPI() {
         <div class="error-message">
           <p>Error al cargar las imágenes. Por favor, intenta de nuevo más tarde.</p>
           <p>Detalles: ${error.message}</p>
+          <button onclick="forceReload()">Reintentar</button>
         </div>
       `;
     });
+}
+
+// Función para forzar una recarga completa
+function forceReload() {
+  console.log('Forzando recarga...');
+  window.location.reload(true);
 }
 
 let columns = 4
@@ -94,24 +109,30 @@ function ensureCorrectImagePath(imagePath) {
   }
   
   let processedPath = imagePath
+  console.log(`Procesando ruta de imagen: "${processedPath}"`)
   
   // Si ya tiene la ruta completa con http, devolverla
   if (processedPath.startsWith('http')) {
+    console.log(`Ruta externa (http): ${processedPath}`)
     return processedPath
   }
   
   // Eliminar las barras iniciales si existen para normalizar
   if (processedPath.startsWith('/')) {
     processedPath = processedPath.substring(1)
+    console.log(`Eliminando barra inicial: ${processedPath}`)
   }
   
   // Si ya tiene 'images/' al inicio, asegurarse de que no tenga barras duplicadas
   if (processedPath.startsWith('images/')) {
+    console.log(`Ruta ya tiene prefijo images/: ${processedPath}`)
     return processedPath
   }
   
   // Para cualquier otro caso, añadir el prefijo 'images/'
-  return `images/${processedPath}`
+  const finalPath = `images/${processedPath}`
+  console.log(`Ruta final: ${finalPath}`)
+  return finalPath
 }
 
 // Función para posicionar un elemento en el layout masonry
