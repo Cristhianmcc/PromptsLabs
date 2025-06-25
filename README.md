@@ -448,3 +448,42 @@ Estos cambios mejoran significativamente la experiencia de usuario, el SEO y el 
 ## Conclusión
 
 La implementación SEO es un proceso continuo que requiere atención constante y mejoras incrementales. Esta guía proporciona los fundamentos para optimizar un sitio web de prompts para IA con el objetivo de posicionarlo en los primeros resultados de búsqueda para términos relacionados con "Prompts".
+
+## Diagnóstico y Solución de Problemas
+
+Si tienes problemas con el despliegue en Render, especialmente relacionados con la carga inicial de datos o imágenes, puedes usar las siguientes herramientas de diagnóstico:
+
+### Endpoint de Diagnóstico
+
+La aplicación incluye un endpoint especial para verificar el estado de la base de datos y archivos. Accede a:
+
+```
+https://tu-dominio.onrender.com/api/diagnostics
+```
+
+> En producción, este endpoint solo es accesible si estás autenticado como administrador.
+
+### Logs de Diagnóstico
+
+Los scripts de inicio y diagnóstico generan logs detallados que puedes revisar:
+
+- **Log del servidor:** `/data/server.log`
+- **Log de diagnóstico pre-inicio:** `/data/diagnostico_pre.log`
+
+Puedes acceder a estos logs desde la sección "Logs" del panel de control de Render.
+
+### Inicialización de Datos
+
+La aplicación está configurada para cargar automáticamente datos de ejemplo desde `defaultData.js` cuando la base de datos está vacía. Esto garantiza que siempre haya contenido disponible después de un despliegue, incluso si el volumen persistente está vacío.
+
+Para añadir o modificar estos datos de ejemplo, edita el archivo `defaultData.js` en la raíz del proyecto.
+
+### Problemas Comunes y Soluciones
+
+1. **Imágenes no visibles:** Verifica que las imágenes se han copiado correctamente al directorio `/data/images/`. El script `start.sh` intenta copiar las imágenes automáticamente.
+
+2. **Base de datos vacía:** La aplicación inicializará automáticamente la base de datos con datos de ejemplo. Verifica los logs para asegurarte de que este proceso completó correctamente.
+
+3. **Error de permisos:** Si ves errores relacionados con permisos, verifica los logs de diagnóstico y asegúrate de que los directorios `/data` y `/data/images` tienen los permisos correctos.
+
+4. **Cambios en estructura de datos:** Si modificas la estructura de la base de datos, asegúrate de actualizar todas las consultas SQL en `server.js` y la función `importInitialData()`.

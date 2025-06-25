@@ -233,97 +233,169 @@ function createDefaultAdmin() {
 // Función para importar datos iniciales desde el archivo JS
 function importInitialData() {
     try {
-        // Leer el archivo scripts.js
-        const scriptPath = path.join(__dirname, 'scripts.js');
-        let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+        // Intentar cargar los datos desde defaultData.js
+        const { defaultPrompts } = require('./defaultData');
         
-        // Extraer el array promptsData usando una expresión regular
-        const promptsDataMatch = scriptContent.match(/const\s+promptsData\s*=\s*\[([\s\S]*?)\];/);
-        
-        if (promptsDataMatch && promptsDataMatch[1]) {
-            // Convertir el texto del array a formato JSON para poder procesarlo
-            const jsonStr = '[' + promptsDataMatch[1] + ']';
-            // Limpiar el texto para hacerlo compatible con JSON
-            const cleanedJsonStr = jsonStr
-                .replace(/(\s*{\s*)/g, '{')
-                .replace(/(\s*}\s*),/g, '},')
-                .replace(/image:\s*"([^"]+)"/g, '"image":"$1"')
-                .replace(/prompt:\s*"([^"]+)"/g, '"prompt":"$1"')
-                .replace(/categories:\s*\[(.*?)\]/g, function(match, p1) {
-                    // Convertir el array de categorías a formato JSON
-                    const categoriesJson = p1.split(',')
-                        .map(cat => `"${cat.trim().replace(/"/g, '')}"`)
-                        .join(',');
-                    return `"categories":[${categoriesJson}]`;
-                });
+        if (defaultPrompts && Array.isArray(defaultPrompts) && defaultPrompts.length > 0) {
+            console.log(`Cargando ${defaultPrompts.length} prompts desde defaultData.js`);
             
-            try {
-                const promptsData = JSON.parse(cleanedJsonStr);
-                  
-                // Crear un conjunto de categorías únicas
-                const uniqueCategories = new Set();
-                promptsData.forEach(item => {
-                    if (item.categories && Array.isArray(item.categories)) {
-                        item.categories.forEach(cat => uniqueCategories.add(cat.trim()));
-                    }
-                });
-                
-                // Insertar categorías en la tabla de categorías
-                const categoryInsertStmt = db.prepare("INSERT OR IGNORE INTO categories (name, slug, description) VALUES (?, ?, ?)");
-                uniqueCategories.forEach(category => {
-                    const slug = category.toLowerCase()
-                        .replace(/\s+/g, '-')
-                        .replace(/[^\w\-]+/g, '')
-                        .replace(/\-\-+/g, '-');
-                    categoryInsertStmt.run(category, slug, `Prompts de la categoría ${category}`);
-                });
-                categoryInsertStmt.finalize();
-                
-                // Insertar prompts y sus relaciones con categorías
-                db.serialize(() => {
-                    // Insertar cada prompt
-                    promptsData.forEach(item => {
-                        // Asegurarse de que las rutas de imágenes sean correctas (sin /image/ al inicio)
-                        const imagePath = item.image.startsWith('/images/') ? 
-                            item.image.substring(8) : // Quitar '/images/' del inicio
-                            item.image;
-                        
-                        db.run("INSERT INTO prompts (image, prompt) VALUES (?, ?)", 
-                            [imagePath, item.prompt], 
-                            function(err) {
-                                if (err) {
-                                    console.error('Error al insertar prompt:', err.message);
-                                    return;
-                                }
-                                
-                                const promptId = this.lastID;
-                                
-                                // Si el prompt tiene categorías, crear las relaciones
-                                if (item.categories && Array.isArray(item.categories)) {
-                                    const relStmt = db.prepare("INSERT INTO prompt_categories (prompt_id, category_id) VALUES (?, (SELECT id FROM categories WHERE name = ?))");
-                                    
-                                    item.categories.forEach(category => {
-                                        relStmt.run(promptId, category.trim(), err => {
-                                            if (err) console.error(`Error al relacionar prompt ${promptId} con categoría ${category}:`, err.message);
-                                        });
-                                    });
-                                    
-                                    relStmt.finalize();
-                                }
+            // Crear un conjunto de categorías únicas
+            const uniqueCategories = new Set();
+            defaultPrompts.forEach(item => {
+                if (item.categories && Array.isArray(item.categories)) {
+                    item.categories.forEach(cat => uniqueCategories.add(cat.trim()));
+                }
+            });
+            
+            // Insertar categorías en la tabla de categorías
+            const categoryInsertStmt = db.prepare("INSERT OR IGNORE INTO categories (name, slug, description) VALUES (?, ?, ?)");
+            uniqueCategories.forEach(category => {
+                const slug = category.toLowerCase()
+                    .replace(/\s+/g, '-')
+                    .replace(/[^\w\-]+/g, '')
+                    .replace(/\-\-+/g, '-');
+                categoryInsertStmt.run(category, slug, `Prompts de la categoría ${category}`);
+            });
+            categoryInsertStmt.finalize();
+            
+            // Insertar prompts y sus relaciones con categorías
+            db.serialize(() => {
+                // Insertar cada prompt
+                defaultPrompts.forEach(item => {
+                    // Asegurarse de que las rutas de imágenes sean correctas (sin /image/ al inicio)
+                    const imagePath = item.image.startsWith('/images/') ? 
+                        item.image.substring(8) : // Quitar '/images/' del inicio
+                        item.image;
+                    
+                    db.run("INSERT INTO prompts (image, prompt) VALUES (?, ?)", 
+                        [imagePath, item.prompt], 
+                        function(err) {
+                            if (err) {
+                                console.error('Error al insertar prompt:', err.message);
+                                return;
                             }
-                        );
-                    });
+                            
+                            const promptId = this.lastID;
+                            
+                            // Si el prompt tiene categorías, crear las relaciones
+                            if (item.categories && Array.isArray(item.categories)) {
+                                const relStmt = db.prepare("INSERT INTO prompt_categories (prompt_id, category_id) VALUES (?, (SELECT id FROM categories WHERE name = ?))");
+                                
+                                item.categories.forEach(category => {
+                                    relStmt.run(promptId, category.trim(), err => {
+                                        if (err) console.error(`Error al relacionar prompt ${promptId} con categoría ${category}:`, err.message);
+                                    });
+                                });
+                                
+                                relStmt.finalize();
+                            }
+                        }
+                    );
                 });
-                
-                console.log('Datos iniciales importados correctamente');
-            } catch (jsonError) {
-                console.error('Error al parsear JSON', jsonError);
-            }
+            });
+            
+            console.log('Datos iniciales importados correctamente desde defaultData.js');
         } else {
-            console.error('No se pudo encontrar el array promptsData en scripts.js');
+            console.error('No se encontraron prompts válidos en defaultData.js');
         }
-    } catch (fileError) {
-        console.error('Error al leer el archivo scripts.js', fileError);
+    } catch (error) {
+        console.error('Error al importar datos iniciales:', error);
+        console.log('Intentando usar método alternativo (scripts.js)...');
+        
+        // Método alternativo: intentar extraer los datos de scripts.js
+        try {
+            // Leer el archivo scripts.js
+            const scriptPath = path.join(__dirname, 'scripts.js');
+            let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+            
+            // Extraer el array promptsData usando una expresión regular
+            const promptsDataMatch = scriptContent.match(/const\s+promptsData\s*=\s*\[([\s\S]*?)\];/);
+            
+            if (promptsDataMatch && promptsDataMatch[1]) {
+                // Convertir el texto del array a formato JSON para poder procesarlo
+                const jsonStr = '[' + promptsDataMatch[1] + ']';
+                // Limpiar el texto para hacerlo compatible con JSON
+                const cleanedJsonStr = jsonStr
+                    .replace(/(\s*{\s*)/g, '{')
+                    .replace(/(\s*}\s*),/g, '},')
+                    .replace(/image:\s*"([^"]+)"/g, '"image":"$1"')
+                    .replace(/prompt:\s*"([^"]+)"/g, '"prompt":"$1"')
+                    .replace(/categories:\s*\[(.*?)\]/g, function(match, p1) {
+                        // Convertir el array de categorías a formato JSON
+                        const categoriesJson = p1.split(',')
+                            .map(cat => `"${cat.trim().replace(/"/g, '')}"`)
+                            .join(',');
+                        return `"categories":[${categoriesJson}]`;
+                    });
+                
+                try {
+                    const promptsData = JSON.parse(cleanedJsonStr);
+                      
+                    // Crear un conjunto de categorías únicas
+                    const uniqueCategories = new Set();
+                    promptsData.forEach(item => {
+                        if (item.categories && Array.isArray(item.categories)) {
+                            item.categories.forEach(cat => uniqueCategories.add(cat.trim()));
+                        }
+                    });
+                    
+                    // Insertar categorías en la tabla de categorías
+                    const categoryInsertStmt = db.prepare("INSERT OR IGNORE INTO categories (name, slug, description) VALUES (?, ?, ?)");
+                    uniqueCategories.forEach(category => {
+                        const slug = category.toLowerCase()
+                            .replace(/\s+/g, '-')
+                            .replace(/[^\w\-]+/g, '')
+                            .replace(/\-\-+/g, '-');
+                        categoryInsertStmt.run(category, slug, `Prompts de la categoría ${category}`);
+                    });
+                    categoryInsertStmt.finalize();
+                    
+                    // Insertar prompts y sus relaciones con categorías
+                    db.serialize(() => {
+                        // Insertar cada prompt
+                        promptsData.forEach(item => {
+                            // Asegurarse de que las rutas de imágenes sean correctas (sin /image/ al inicio)
+                            const imagePath = item.image.startsWith('/images/') ? 
+                                item.image.substring(8) : // Quitar '/images/' del inicio
+                                item.image;
+                            
+                            db.run("INSERT INTO prompts (image, prompt) VALUES (?, ?)", 
+                                [imagePath, item.prompt], 
+                                function(err) {
+                                    if (err) {
+                                        console.error('Error al insertar prompt:', err.message);
+                                        return;
+                                    }
+                                    
+                                    const promptId = this.lastID;
+                                    
+                                    // Si el prompt tiene categorías, crear las relaciones
+                                    if (item.categories && Array.isArray(item.categories)) {
+                                        const relStmt = db.prepare("INSERT INTO prompt_categories (prompt_id, category_id) VALUES (?, (SELECT id FROM categories WHERE name = ?))");
+                                        
+                                        item.categories.forEach(category => {
+                                            relStmt.run(promptId, category.trim(), err => {
+                                                if (err) console.error(`Error al relacionar prompt ${promptId} con categoría ${category}:`, err.message);
+                                            });
+                                        });
+                                        
+                                        relStmt.finalize();
+                                    }
+                                }
+                            );
+                        });
+                    });
+                    
+                    console.log('Datos iniciales importados correctamente desde scripts.js');
+                } catch (jsonError) {
+                    console.error('Error al parsear JSON', jsonError);
+                }
+            } else {
+                console.error('No se pudo encontrar el array promptsData en scripts.js');
+            }
+        } catch (fileError) {
+            console.error('Error al leer el archivo scripts.js', fileError);
+        }
     }
 }
 
@@ -839,6 +911,97 @@ app.get('/api/admin/update-categories', (req, res) => {
             });
         }
     });
+});
+
+// Endpoint de diagnóstico - solo accesible en modo desarrollo o con autenticación
+app.get('/api/diagnostics', (req, res) => {
+    // En producción, requerir autenticación
+    if (isProd && !req.session.isAuthenticated) {
+        return res.status(401).json({ error: 'No autorizado' });
+    }
+    
+    const diagnostics = {
+        environment: isProd ? 'production' : 'development',
+        timestamp: new Date().toISOString(),
+        dbPath: dbPath,
+        uploadsDir: uploadsDir,
+        dbExists: false,
+        imagesDir: {
+            exists: false,
+            readable: false,
+            writable: false,
+            files: []
+        },
+        dbStats: {
+            promptCount: 0,
+            categoryCount: 0
+        }
+    };
+    
+    // Verificar si la base de datos existe
+    try {
+        diagnostics.dbExists = fs.existsSync(dbPath);
+    } catch (error) {
+        diagnostics.dbError = error.message;
+    }
+    
+    // Verificar directorio de imágenes
+    try {
+        const imagesDirExists = fs.existsSync(uploadsDir);
+        diagnostics.imagesDir.exists = imagesDirExists;
+        
+        if (imagesDirExists) {
+            try {
+                // Verificar permisos
+                fs.accessSync(uploadsDir, fs.constants.R_OK);
+                diagnostics.imagesDir.readable = true;
+            } catch (e) {
+                diagnostics.imagesDir.readable = false;
+            }
+            
+            try {
+                fs.accessSync(uploadsDir, fs.constants.W_OK);
+                diagnostics.imagesDir.writable = true;
+            } catch (e) {
+                diagnostics.imagesDir.writable = false;
+            }
+            
+            // Listar archivos
+            try {
+                const files = fs.readdirSync(uploadsDir);
+                diagnostics.imagesDir.files = files.slice(0, 20); // Limitar a 20 archivos para no sobrecargar
+                diagnostics.imagesDir.totalFiles = files.length;
+            } catch (e) {
+                diagnostics.imagesDir.fileListError = e.message;
+            }
+        }
+    } catch (error) {
+        diagnostics.imagesDir.error = error.message;
+    }
+    
+    // Verificar estado de la base de datos
+    if (diagnostics.dbExists) {
+        db.get("SELECT COUNT(*) as count FROM prompts", [], (err, row) => {
+            if (err) {
+                diagnostics.dbStats.promptError = err.message;
+                return res.json(diagnostics);
+            }
+            
+            diagnostics.dbStats.promptCount = row ? row.count : 0;
+            
+            db.get("SELECT COUNT(*) as count FROM categories", [], (err, row) => {
+                if (err) {
+                    diagnostics.dbStats.categoryError = err.message;
+                    return res.json(diagnostics);
+                }
+                
+                diagnostics.dbStats.categoryCount = row ? row.count : 0;
+                res.json(diagnostics);
+            });
+        });
+    } else {
+        res.json(diagnostics);
+    }
 });
 
 // Iniciar el servidor
