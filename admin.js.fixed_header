@@ -1,0 +1,15 @@
+// Script para la funcionalidad del panel de administración
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables globales
+    let deletePromptId = null;
+    
+    // Elementos DOM
+    const promptsTable = document.getElementById('promptsTable');
+    const addPromptForm = document.getElementById('addPromptForm');
+    const editPromptForm = document.getElementById('editPromptForm');
+    const saveNewPromptBtn = document.getElementById('saveNewPrompt');
+    const saveEditPromptBtn = document.getElementById('saveEditPrompt');
+    const confirmDeleteBtn = document.getElementById('confirmDelete');
+    const changeImageCheckbox = document.getElementById('changeImage');
+    const newImageContainer = document.getElementById('newImageContainer');
