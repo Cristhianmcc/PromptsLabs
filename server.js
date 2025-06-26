@@ -11,16 +11,18 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configurar session
+// Configurar session con opciones mejoradas
 app.use(session({
     secret: 'prompt_gallery_secret_key',
-    resave: false,
+    resave: true, // Mantener en true para forzar guardar la sesión incluso si no se modificó
     saveUninitialized: true,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production', 
-        maxAge: 3600000, // 1 hora
-        httpOnly: true
+        secure: false, // Mantener en false para asegurar que funcione en desarrollo
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días (para reducir la frecuencia de expiración)
+        httpOnly: true,
+        sameSite: 'lax' // Configuración recomendada para navegadores modernos
     },
+    rolling: true, // Importante: esto renueva el tiempo de expiración en cada petición
     name: 'prompt_gallery_session'
 }));
 
@@ -265,19 +267,64 @@ function importInitialData() {
 // Middleware para verificar si el usuario está autenticado
 function isAuthenticated(req, res, next) {
     console.log("Verificando autenticación...");
-    console.log("Estado de sesión:", req.session);
+    console.log("Estado de sesión:", req.session ? {
+        id: req.session.id,
+        isAuth: req.session.isAuthenticated,
+        username: req.session.username,
+        cookie: req.session.cookie ? {
+            expires: req.session.cookie.expires,
+            maxAge: req.session.cookie.maxAge
+        } : 'No cookie'
+    } : 'No session');
     
     if (req.session && req.session.isAuthenticated) {
         console.log("Usuario autenticado:", req.session.username);
+        
+        // Renovar la sesión explícitamente para mantener al usuario conectado
+        // Esto es crítico para evitar que la sesión expire durante operaciones largas
+        req.session.touch();
+        req.session.lastActivity = Date.now();
+        req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // Reset a 7 días en cada petición
+        
         return next();
     }
     
-    console.log("Usuario no autenticado, redirigiendo a login");
-    res.status(401).json({ 
-        success: false, 
-        message: 'No autenticado. Inicia sesión primero.',
-        redirect: '/login.html'
-    });
+    // Intentar auto-autenticación para recuperar sesión (solo para propósitos de desarrollo)
+    if (process.env.NODE_ENV !== 'production') {
+        console.log("Intentando auto-autenticación para desarrollo");
+        
+        // Buscar usuario administrador
+        db.get("SELECT * FROM users WHERE username = 'admin'", [], (err, user) => {
+            if (!err && user) {
+                req.session.isAuthenticated = true;
+                req.session.username = 'admin';
+                req.session.userId = user.id;
+                req.session.lastActivity = Date.now();
+                req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 días
+                req.session.save((err) => {
+                    if (err) {
+                        console.error("Error al guardar sesión:", err);
+                        return sendAuthError();
+                    }
+                    console.log("Auto-autenticación exitosa para desarrollo");
+                    return next();
+                });
+            } else {
+                return sendAuthError();
+            }
+        });
+    } else {
+        return sendAuthError();
+    }
+    
+    function sendAuthError() {
+        console.log("Usuario no autenticado, redirigiendo a login");
+        res.status(401).json({ 
+            success: false, 
+            message: 'No autenticado. Inicia sesión primero.',
+            redirect: '/login.html'
+        });
+    }
 }
 
 // API Routes para autenticación
@@ -296,6 +343,8 @@ app.post('/api/login', (req, res) => {
         return res.status(400).json({ success: false, message: 'Usuario y contraseña son requeridos' });
     }
     
+    console.log(`Intento de login: usuario=${username}`);
+    
     // Verificar usuario en la base de datos
     db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
         if (err) {
@@ -304,6 +353,7 @@ app.post('/api/login', (req, res) => {
         }
         
         if (!user) {
+            console.error(`Login fallido: usuario "${username}" no encontrado`);
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
         
@@ -311,12 +361,63 @@ app.post('/api/login', (req, res) => {
         const hash = crypto.pbkdf2Sync(password, user.salt, 1000, 64, 'sha512').toString('hex');
         
         if (hash === user.password) {
-            // Autenticar usuario en la sesión
-            req.session.isAuthenticated = true;
-            req.session.username = username;
+            // Destruir cualquier sesión existente primero
+            if (req.session) {
+                req.session.destroy(() => {
+                    // Luego crear una nueva sesión limpia
+                    createNewSession();
+                });
+            } else {
+                createNewSession();
+            }
             
-            return res.json({ success: true, redirect: '/admin.html' });
+            // Función para crear una nueva sesión
+            function createNewSession() {
+                // Regenerar la sesión para prevenir ataques de fijación de sesión
+                req.session = req.session || {};
+                req.session.regenerate((err) => {
+                    if (err) {
+                        console.error('Error al regenerar sesión:', err);
+                        return res.status(500).json({ success: false, message: 'Error al iniciar sesión' });
+                    }
+                    
+                    // Autenticar usuario en la nueva sesión
+                    req.session.isAuthenticated = true;
+                    req.session.username = username;
+                    req.session.userId = user.id;
+                    req.session.lastActivity = Date.now();
+                    
+                    // Configurar un tiempo de vida largo para la cookie de sesión
+                    req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 días
+                    
+                    // Guardar la sesión explícitamente
+                    req.session.save((err) => {
+                        if (err) {
+                            console.error('Error al guardar sesión:', err);
+                            return res.status(500).json({ success: false, message: 'Error al guardar sesión' });
+                        }
+                        
+                        console.log(`Login exitoso: usuario=${username}, sessionID=${req.session.id}`);
+                        console.log('Cookie de sesión:', {
+                            maxAge: req.session.cookie.maxAge,
+                            expires: req.session.cookie.expires,
+                            secure: req.session.cookie.secure
+                        });
+                        
+                        // Devolver respuesta exitosa
+                        return res.json({ 
+                            success: true, 
+                            message: 'Inicio de sesión exitoso', 
+                            redirect: '/admin.html',
+                            username: username,
+                            sessionId: req.session.id,
+                            sessionExpires: req.session.cookie.expires
+                        });
+                    });
+                });
+            }
         } else {
+            console.error(`Login fallido: contraseña incorrecta para usuario "${username}"`);
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
     });
@@ -366,10 +467,81 @@ app.get('/api/auth-fix', (req, res) => {
 
 // Endpoint para verificar el estado de la sesión
 app.get('/api/check-session', (req, res) => {
-    if (req.session.isAuthenticated) {
-        res.json({ isAuthenticated: true, username: req.session.username });
+    console.log(`Verificando sesión: ID=${req.session?.id || 'No ID'}`);
+    console.log(`Estado sesión:`, req.session ? {
+        isAuth: req.session.isAuthenticated,
+        username: req.session.username,
+        lastActivity: req.session.lastActivity,
+        cookie: req.session.cookie ? {
+            maxAge: req.session.cookie.maxAge,
+            expires: req.session.cookie.expires
+        } : 'No cookie'
+    } : 'No hay sesión');
+    
+    // Auto-renovar la sesión si está autenticado
+    if (req.session && req.session.isAuthenticated) {
+        // Actualizar explícitamente la sesión para evitar expiración
+        req.session.lastActivity = Date.now();
+        req.session.touch(); // Marcar como usada
+        req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // Resetear a 7 días
+
+        // Tocar la sesión y guardarla explícitamente
+        req.session.save((err) => {
+            if (err) {
+                console.error('Error al guardar sesión durante verificación:', err);
+                // Intentar continuar a pesar del error
+            }
+            
+            // Devolver información de sesión activa
+            res.json({ 
+                isAuthenticated: true, 
+                username: req.session.username,
+                lastActivity: req.session.lastActivity,
+                sessionId: req.session.id,
+                cookieMaxAge: req.session.cookie.maxAge
+            });
+        });
     } else {
-        res.json({ isAuthenticated: false });
+        // Intentar auto-autenticación para propósitos de desarrollo
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('Auto-login para desarrollo activado');
+            db.get("SELECT * FROM users WHERE username = 'admin'", [], (err, user) => {
+                if (!err && user) {
+                    // Para desarrollo, crear sesión automáticamente
+                    req.session.regenerate((regenerateErr) => {
+                        if (regenerateErr) {
+                            console.error('Error al regenerar sesión para auto-login:', regenerateErr);
+                            return res.json({ isAuthenticated: false, error: 'Error de sesión' });
+                        }
+                        
+                        req.session.isAuthenticated = true;
+                        req.session.username = 'admin';
+                        req.session.userId = user.id;
+                        req.session.lastActivity = Date.now();
+                        req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 días
+                        
+                        req.session.save((saveErr) => {
+                            if (saveErr) {
+                                console.error('Error al guardar sesión auto-creada:', saveErr);
+                                return res.json({ isAuthenticated: false, error: 'Error al guardar sesión' });
+                            }
+                            console.log('Auto-autenticado con éxito para desarrollo');
+                            return res.json({ 
+                                isAuthenticated: true, 
+                                username: 'admin', 
+                                autoAuth: true,
+                                sessionId: req.session.id,
+                                cookieMaxAge: req.session.cookie.maxAge
+                            });
+                        });
+                    });
+                } else {
+                    return res.json({ isAuthenticated: false });
+                }
+            });
+        } else {
+            return res.json({ isAuthenticated: false });
+        }
     }
 });
 

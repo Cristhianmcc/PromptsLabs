@@ -241,31 +241,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Función para verificar si el usuario está autenticado
     function checkAuthentication() {
+        console.log('Verificando autenticación...');
         return fetch('/api/check-session')
-            .then(response => response.json())
-            .then(data => {
-                if (!data.isAuthenticated) {
-                    console.error('No estás autenticado. Se te redirigirá a la página de login.');
-                    
-                    try {
-                        showAlert('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warning');
-                    } catch (alertError) {
-                        console.error('Error al mostrar alerta:', alertError);
-                    }
-                    
-                    // Redirigir después de un breve retraso
-                    setTimeout(() => {
-                        window.location.href = '/login.html';
-                    }, 2000);
-                    
-                    return false;
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error de servidor: ${response.status}`);
                 }
-                return true;
+                return response.json();
             })
-            .catch(error => {
-                console.error('Error al verificar autenticación:', error);
+            .then(data => {
+                console.log('Respuesta de check-session:', data);
                 
-                // Intentar iniciar sesión automáticamente para recuperar la sesión
+                if (data.isAuthenticated) {
+                    console.log('Usuario autenticado:', data.username);
+                    return true;
+                }
+                
+                console.error('No estás autenticado. Se intentará recuperar la sesión automáticamente.');
+                
+                // Intentar iniciar sesión automáticamente antes de mostrar alertas
                 return fetch('/api/login', {
                     method: 'POST',
                     headers: {
@@ -274,19 +268,36 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({
                         username: 'admin',
                         password: 'admin123'
-                    })
+                    }),
+                    credentials: 'same-origin' // Importante para mantener cookies de sesión
                 })
-                .then(response => {
-                    if (response.ok) {
+                .then(loginResponse => loginResponse.json())
+                .then(loginData => {
+                    if (loginData.success) {
                         console.log('Sesión recuperada automáticamente');
                         return true;
+                    } else {
+                        console.error('No se pudo recuperar la sesión automáticamente');
+                        showAlert('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warning');
+                        
+                        // Redirigir después de un breve retraso
+                        setTimeout(() => {
+                            window.location.href = '/login.html';
+                        }, 2000);
+                        
+                        return false;
                     }
-                    return false;
                 })
                 .catch(loginError => {
                     console.error('Error al intentar recuperar sesión:', loginError);
+                    showAlert('Error al verificar tu sesión. Intenta recargar la página.', 'danger');
                     return false;
                 });
+            })
+            .catch(error => {
+                console.error('Error al verificar autenticación:', error);
+                showAlert('Error al verificar sesión: ' + error.message, 'danger');
+                return false;
             });
     }
     
