@@ -264,10 +264,20 @@ function importInitialData() {
 
 // Middleware para verificar si el usuario está autenticado
 function isAuthenticated(req, res, next) {
-    if (req.session.isAuthenticated) {
+    console.log("Verificando autenticación...");
+    console.log("Estado de sesión:", req.session);
+    
+    if (req.session && req.session.isAuthenticated) {
+        console.log("Usuario autenticado:", req.session.username);
         return next();
     }
-    res.redirect('/login.html');
+    
+    console.log("Usuario no autenticado, redirigiendo a login");
+    res.status(401).json({ 
+        success: false, 
+        message: 'No autenticado. Inicia sesión primero.',
+        redirect: '/login.html'
+    });
 }
 
 // API Routes para autenticación
@@ -462,9 +472,10 @@ app.get('/api/categories', (req, res) => {
 
 // API Routes para administración (protegidas por autenticación)
 app.post('/api/prompts', isAuthenticated, upload.single('image'), (req, res) => {
-    console.log('Recibida petición para crear nuevo prompt');
-    console.log('Body:', req.body);
+    console.log('===== RECIBIDA PETICIÓN PARA CREAR NUEVO PROMPT =====');
+    console.log('Body:', JSON.stringify(req.body, null, 2));
     console.log('Archivo:', req.file);
+    console.log('Sesión:', req.session);
     
     const { prompt, categories } = req.body;
     const imagePath = req.file ? req.file.filename : null;

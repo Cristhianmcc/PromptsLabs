@@ -244,6 +244,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Guardar nuevo prompt
     saveNewPromptBtn.addEventListener('click', function() {
+        // Verificar autenticación antes de continuar
+        checkAuthentication().then(isAuthenticated => {
+            if (!isAuthenticated) return;
+            
+            // Continuar con el envío del formulario
         const formData = new FormData(addPromptForm);
         
         // Validación básica
