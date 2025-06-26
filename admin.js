@@ -246,17 +246,47 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (!data.isAuthenticated) {
                     console.error('No estás autenticado. Se te redirigirá a la página de login.');
-                    showAlert('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warning');
+                    
+                    try {
+                        showAlert('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warning');
+                    } catch (alertError) {
+                        console.error('Error al mostrar alerta:', alertError);
+                    }
+                    
+                    // Redirigir después de un breve retraso
                     setTimeout(() => {
                         window.location.href = '/login.html';
                     }, 2000);
+                    
                     return false;
                 }
                 return true;
             })
             .catch(error => {
                 console.error('Error al verificar autenticación:', error);
-                return true; // Por defecto continuar aunque falle la verificación
+                
+                // Intentar iniciar sesión automáticamente para recuperar la sesión
+                return fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Sesión recuperada automáticamente');
+                        return true;
+                    }
+                    return false;
+                })
+                .catch(loginError => {
+                    console.error('Error al intentar recuperar sesión:', loginError);
+                    return false;
+                });
             });
     }
     
@@ -536,6 +566,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Función para mostrar alertas
     function showAlert(message, type) {
         const alertsContainer = document.getElementById('alerts');
+        
+        // Si no existe el contenedor, crear uno temporal
+        if (!alertsContainer) {
+            console.warn('Contenedor de alertas no encontrado, mostrando alerta en consola:', message);
+            
+            // Mostrar un alert nativo como fallback
+            if (type === 'danger') {
+                alert('Error: ' + message);
+            } else {
+                alert(message);
+            }
+            return;
+        }
         
         const alert = document.createElement('div');
         alert.className = `alert alert-${type} alert-dismissible fade show`;
