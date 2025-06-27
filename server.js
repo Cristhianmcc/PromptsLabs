@@ -6,6 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const session = require('express-session');
 const crypto = require('crypto');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 // Inicializar la aplicación Express
 const app = express();
@@ -105,28 +107,23 @@ try {
     // No detener la aplicación, seguir adelante aunque no se puedan crear los directorios
 }
 
-// Configurar multer para la carga de imágenes
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadsDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        cb(null, uniqueSuffix + ext);
-    }
+// Configura Cloudinary con tus credenciales
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dxhcv6buy',
+  api_key: process.env.CLOUDINARY_API_KEY || '162942145365156',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'I4N-Tqi4dYrlNcamvQmIFymk4l8'
 });
 
-const upload = multer({ 
-    storage: storage,
-    fileFilter: function (req, file, cb) {
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Solo se permiten imágenes'));
-        }
-    }
+// Configura multer para usar Cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'prompts_gallery',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 1024, height: 1024, crop: 'limit' }]
+  }
 });
+const upload = multer({ storage: storage });
 
 // Conectar a la base de datos SQLite
 // Asegurar que el directorio de la base de datos exista
@@ -626,8 +623,8 @@ app.post('/api/prompts', isAuthenticated, upload.single('image'), (req, res) => 
     console.log('Sesión:', req.session);
     
     const { prompt, categories } = req.body;
-    const imagePath = req.file ? req.file.filename : null;
-    
+    // Guardar la URL de Cloudinary
+    const imagePath = req.file ? req.file.path : null; // req.file.path es la URL de Cloudinary
     if (!prompt || !imagePath) {
         console.error('Faltan campos obligatorios:', { prompt: !!prompt, imagePath: !!imagePath });
         return res.status(400).json({ success: false, message: 'Prompt e imagen son requeridos' });
@@ -768,9 +765,7 @@ app.put('/api/prompts/:id', isAuthenticated, upload.single('image'), (req, res) 
     
     // Verificar si se subió una nueva imagen
     if (req.file) {
-        const imagePath = req.file.filename;
-        console.log('Nueva imagen recibida:', imagePath);
-        
+        const imagePath = req.file.path; // URL de Cloudinary
         // Actualizar prompt con nueva imagen
         db.run("UPDATE prompts SET prompt = ?, image = ? WHERE id = ?", 
             [prompt, imagePath, promptId],
