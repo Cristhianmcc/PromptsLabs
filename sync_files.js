@@ -1,5 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const imageHelper = require('./image_helper');
+
+/**
+ * Script para sincronizar archivos entre diferentes directorios del proyecto
+ * Principalmente para asegurar que las imágenes estén disponibles tanto en /images como en /data/images
+ */
 
 // Funciones auxiliares
 function copyFile(source, dest) {
@@ -58,68 +64,46 @@ function copyDatabase() {
     return copyFile(dataDbPath, rootDbPath);
 }
 
-// Copia imágenes desde data/images a images/
-function copyImages() {
-    console.log("\nCopiando imágenes...");
+// Copia imágenes entre data/images y images/
+function syncImages() {
+    console.log("\nSincronizando imágenes entre directorios...");
     
-    // Verificar si existe directorio fuente
-    if (!fs.existsSync(dataImagesPath)) {
-        console.error(`❌ El directorio fuente no existe: ${dataImagesPath}`);
+    // Asegurar que ambos directorios existan
+    if (!checkDirectoryExists(dataImagesPath) || !checkDirectoryExists(rootImagesPath)) {
         return false;
     }
     
-    // Crear directorio destino si no existe
-    if (!checkDirectoryExists(rootImagesPath)) {
-        return false;
-    }
-    
-    // Obtener archivos del directorio fuente
-    let files;
     try {
-        files = fs.readdirSync(dataImagesPath);
-    } catch (err) {
-        console.error(`❌ Error al leer directorio: ${err.message}`);
+        // 1. Primero sincronizar de data/images a images/
+        console.log('\n1. Copiando imágenes de data/images a images/:');
+        const result1 = imageHelper.syncImages(dataImagesPath, rootImagesPath, {
+            onlyCopyMissing: true,
+            priorityImages: ['placeholder.jpg']
+        });
+        
+        console.log(`✅ ${result1.copied} imágenes copiadas`);
+        console.log(`- ${result1.skipped} imágenes omitidas (ya existentes)`);
+        console.log(`❌ ${result1.errors} errores`);
+        
+        // 2. Luego sincronizar de images/ a data/images
+        console.log('\n2. Copiando imágenes de images/ a data/images/:');
+        const result2 = imageHelper.syncImages(rootImagesPath, dataImagesPath, {
+            onlyCopyMissing: true
+        });
+        
+        console.log(`✅ ${result2.copied} imágenes copiadas`);
+        console.log(`- ${result2.skipped} imágenes omitidas (ya existentes)`);
+        console.log(`❌ ${result2.errors} errores`);
+        
+        // Mostrar total
+        const totalSynced = result1.copied + result2.copied;
+        console.log(`\nTotal de imágenes sincronizadas: ${totalSynced}`);
+        
+        return totalSynced > 0 || (result1.skipped > 0 && result2.skipped > 0);
+    } catch (error) {
+        console.error(`❌ Error durante la sincronización: ${error.message}`);
         return false;
     }
-    
-    console.log(`Encontrados ${files.length} archivos para copiar`);
-    
-    // Copiar cada archivo
-    let successCount = 0;
-    let errorCount = 0;
-    
-    for (const file of files) {
-        const sourcePath = path.join(dataImagesPath, file);
-        const destPath = path.join(rootImagesPath, file);
-        
-        // Verificar que es un archivo (no directorio)
-        let isFile;
-        try {
-            isFile = fs.statSync(sourcePath).isFile();
-        } catch (err) {
-            console.error(`❌ Error al verificar archivo ${file}: ${err.message}`);
-            errorCount++;
-            continue;
-        }
-        
-        if (!isFile) {
-            continue;
-        }
-        
-        // Copiar el archivo
-        if (copyFile(sourcePath, destPath)) {
-            successCount++;
-        } else {
-            errorCount++;
-        }
-    }
-    
-    console.log(`\n✅ Copiados ${successCount} archivos exitosamente`);
-    if (errorCount > 0) {
-        console.log(`⚠️ ${errorCount} archivos no pudieron ser copiados`);
-    }
-    
-    return successCount > 0;
 }
 
 // Ejecutar operaciones
@@ -128,10 +112,10 @@ console.log("Fecha:", new Date().toLocaleString());
 console.log("---------------------------------------------------");
 
 const dbCopied = copyDatabase();
-const imagesCopied = copyImages();
+const imagesSynced = syncImages();
 
 console.log("\n=== RESUMEN ===");
 console.log(`Base de datos: ${dbCopied ? '✅ Copiada' : '❌ Error'}`);
-console.log(`Imágenes: ${imagesCopied ? '✅ Copiadas' : '❌ Error'}`);
+console.log(`Imágenes: ${imagesSynced ? '✅ Sincronizadas' : '❌ Error'}`);
 console.log("---------------------------------------------------");
 console.log("Ahora puedes reiniciar el servidor para que use los archivos actualizados.");

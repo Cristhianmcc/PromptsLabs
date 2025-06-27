@@ -100,9 +100,6 @@
             <div class="card-body">
                 <div class="alert alert-info" role="alert" style="display: block; margin-bottom: 20px;">
                     <strong>Información:</strong> Usuario por defecto: <code>admin</code> | Contraseña: <code>admin123</code>
-                </div>            <div class="card-body">
-                <div class="alert alert-info" role="alert" style="display: block; margin-bottom: 20px;">
-                    <strong>Información:</strong> Usuario por defecto: <code>admin</code> | Contraseña: <code>admin123</code>
                 </div>
                 
                 <div class="alert alert-danger" id="errorAlert" role="alert"></div>
@@ -144,24 +141,50 @@
                 }
                 
                 // Enviar solicitud de inicio de sesión
+                // Mostrar indicador de carga
+                document.querySelector('button[type="submit"]').innerHTML = 'Iniciando sesión...';
+                document.querySelector('button[type="submit"]').disabled = true;
+                
                 fetch('/api/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'same-origin' // Importante para mantener las cookies de sesión
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        showError(data.error);
+                .then(response => {
+                    console.log('Status de respuesta:', response.status);
+                    return response.json().then(data => {
+                        return { status: response.status, data };
+                    });
+                })
+                .then(result => {
+                    const { status, data } = result;
+                    
+                    // Restaurar el botón
+                    document.querySelector('button[type="submit"]').innerHTML = 'Iniciar Sesión';
+                    document.querySelector('button[type="submit"]').disabled = false;
+                    
+                    console.log('Respuesta completa:', data);
+                    
+                    if (status >= 400) {
+                        // Error desde el servidor
+                        showError(data.message || 'Error al iniciar sesión. Credenciales inválidas.');
                     } else if (data.success && data.redirect) {
+                        console.log('Login exitoso, redirigiendo a:', data.redirect);
                         window.location.href = data.redirect;
+                    } else {
+                        showError('Respuesta inesperada del servidor. Por favor, intenta de nuevo.');
                     }
                 })
                 .catch(error => {
-                    showError('Error al iniciar sesión. Por favor, intenta de nuevo.');
-                    console.error('Error:', error);
+                    // Restaurar el botón
+                    document.querySelector('button[type="submit"]').innerHTML = 'Iniciar Sesión';
+                    document.querySelector('button[type="submit"]').disabled = false;
+                    
+                    showError('Error al procesar la solicitud. Por favor, intenta de nuevo.');
+                    console.error('Error en fetch:', error);
                 });
             });
             

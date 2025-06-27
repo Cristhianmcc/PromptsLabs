@@ -11,20 +11,37 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configurar session con opciones mejoradas
-app.use(session({
+// Configurar session con opciones mejoradas y compatibles con Node.js v22+
+const sessionOptions = {
     secret: 'prompt_gallery_secret_key',
-    resave: true, // Mantener en true para forzar guardar la sesión incluso si no se modificó
+    resave: true, 
     saveUninitialized: true,
     cookie: { 
-        secure: false, // Mantener en false para asegurar que funcione en desarrollo
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días (para reducir la frecuencia de expiración)
+        secure: false, // Mantener en false para que funcione en desarrollo (sin HTTPS)
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
         httpOnly: true,
-        sameSite: 'lax' // Configuración recomendada para navegadores modernos
+        sameSite: 'lax'
     },
-    rolling: true, // Importante: esto renueva el tiempo de expiración en cada petición
+    rolling: true,
     name: 'prompt_gallery_session'
-}));
+};
+
+// Compatibilidad con versiones modernas de Node.js
+try {
+    console.log('Configurando express-session con manejo de sesiones...');
+    app.use(session(sessionOptions));
+    console.log('express-session configurado correctamente');
+} catch (error) {
+    console.error('Error al configurar express-session:', error);
+    // Intentar con opciones más básicas si hay error
+    console.log('Intentando con configuración alternativa...');
+    app.use(session({
+        secret: 'prompt_gallery_secret_key',
+        resave: true,
+        saveUninitialized: true,
+        cookie: { secure: false, maxAge: 86400000 }
+    }));
+}
 
 // Configurar bodyParser para procesar datos JSON
 app.use(bodyParser.json());
@@ -53,17 +70,16 @@ app.use('/images', express.static(path.join(__dirname, 'images'), {
   fallthrough: true
 }));
 
+// Importar helper de imágenes
+const imageHelper = require('./image_helper');
+
 // Middleware para manejar fallbacks de imágenes
 app.get('/images/:imageName', (req, res) => {
-  // Si llegamos aquí, significa que la imagen solicitada no existe
-  console.log(`Imagen no encontrada: ${req.params.imageName}, sirviendo placeholder`);
-  // Intentar con el placeholder en data/images primero
-  const dataPlaceholder = path.join(uploadsDir, 'placeholder.jpg');
-  if (fs.existsSync(dataPlaceholder)) {
-    return res.sendFile(dataPlaceholder);
-  }
-  // Si no existe, usar el placeholder en /images
-  res.sendFile(path.join(__dirname, 'images', 'placeholder.jpg'));
+  // Usar el helper para servir la imagen o el placeholder
+  imageHelper.serveImage(res, req.params.imageName, {
+    dataDir: uploadsDir,
+    rootDir: path.join(__dirname, 'images')
+  });
 });
 
 // Rutas explícitas para archivos HTML para mayor claridad
@@ -338,84 +354,54 @@ app.get('/login', (req, res) => {
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    
     if (!username || !password) {
         return res.status(400).json({ success: false, message: 'Usuario y contraseña son requeridos' });
     }
-    
     console.log(`Intento de login: usuario=${username}`);
-    
-    // Verificar usuario en la base de datos
     db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
         if (err) {
             console.error('Error al consultar usuario:', err.message);
             return res.status(500).json({ success: false, message: 'Error interno del servidor' });
         }
-        
         if (!user) {
             console.error(`Login fallido: usuario "${username}" no encontrado`);
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
-        
-        // Verificar contraseña
         const hash = crypto.pbkdf2Sync(password, user.salt, 1000, 64, 'sha512').toString('hex');
-        
         if (hash === user.password) {
-            // Destruir cualquier sesión existente primero
-            if (req.session) {
-                req.session.destroy(() => {
-                    // Luego crear una nueva sesión limpia
-                    createNewSession();
-                });
-            } else {
-                createNewSession();
-            }
-            
-            // Función para crear una nueva sesión
-            function createNewSession() {
-                // Regenerar la sesión para prevenir ataques de fijación de sesión
-                req.session = req.session || {};
-                req.session.regenerate((err) => {
-                    if (err) {
-                        console.error('Error al regenerar sesión:', err);
-                        return res.status(500).json({ success: false, message: 'Error al iniciar sesión' });
-                    }
-                    
-                    // Autenticar usuario en la nueva sesión
-                    req.session.isAuthenticated = true;
-                    req.session.username = username;
-                    req.session.userId = user.id;
-                    req.session.lastActivity = Date.now();
-                    
-                    // Configurar un tiempo de vida largo para la cookie de sesión
+            // Regenerar la sesión para evitar problemas de sesión antigua
+            req.session.regenerate((err) => {
+                if (err) {
+                    console.error('Error al regenerar sesión:', err);
+                    return res.status(500).json({ success: false, message: 'Error al crear sesión' });
+                }
+                req.session.isAuthenticated = true;
+                req.session.username = username;
+                req.session.userId = user.id;
+                req.session.lastActivity = Date.now();
+                // Configurar cookie de sesión
+                if (!req.session.cookie) req.session.cookie = {};
+                try {
                     req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 días
-                    
-                    // Guardar la sesión explícitamente
-                    req.session.save((err) => {
-                        if (err) {
-                            console.error('Error al guardar sesión:', err);
-                            return res.status(500).json({ success: false, message: 'Error al guardar sesión' });
-                        }
-                        
-                        console.log(`Login exitoso: usuario=${username}, sessionID=${req.session.id}`);
-                        console.log('Cookie de sesión:', {
-                            maxAge: req.session.cookie.maxAge,
-                            expires: req.session.cookie.expires,
-                            secure: req.session.cookie.secure
-                        });
-                        
-                        // Devolver respuesta exitosa
-                        return res.json({ 
-                            success: true, 
-                            message: 'Inicio de sesión exitoso', 
-                            redirect: '/admin.html',
-                            username: username,
-                            sessionId: req.session.id,
-                            sessionExpires: req.session.cookie.expires
-                        });
+                } catch (e) {
+                    console.error('Error al configurar cookie.maxAge:', e);
+                }
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('Error al guardar sesión:', err);
+                        return res.status(500).json({ success: false, message: 'Error al guardar sesión' });
+                    }
+                    console.log(`Login exitoso: usuario=${username}, sessionID=${req.session.id}`);
+                    return res.json({ 
+                        success: true, 
+                        message: 'Inicio de sesión exitoso', 
+                        redirect: '/admin.html',
+                        username: username,
+                        sessionId: req.session.id,
+                        sessionExpires: req.session.cookie.expires
                     });
                 });
-            }
+            });
         } else {
             console.error(`Login fallido: contraseña incorrecta para usuario "${username}"`);
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
@@ -508,17 +494,19 @@ app.get('/api/check-session', (req, res) => {
             db.get("SELECT * FROM users WHERE username = 'admin'", [], (err, user) => {
                 if (!err && user) {
                     // Para desarrollo, crear sesión automáticamente
-                    req.session.regenerate((regenerateErr) => {
-                        if (regenerateErr) {
-                            console.error('Error al regenerar sesión para auto-login:', regenerateErr);
-                            return res.json({ isAuthenticated: false, error: 'Error de sesión' });
+                    // Limpiar la sesión actual primero
+                    for (let key in req.session) {
+                        if (key !== 'cookie') {
+                            delete req.session[key];
                         }
-                        
-                        req.session.isAuthenticated = true;
-                        req.session.username = 'admin';
-                        req.session.userId = user.id;
-                        req.session.lastActivity = Date.now();
-                        req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 días
+                    }
+                    
+                    // Configurar la nueva sesión
+                    req.session.isAuthenticated = true;
+                    req.session.username = 'admin';
+                    req.session.userId = user.id;
+                    req.session.lastActivity = Date.now();
+                    req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 días
                         
                         req.session.save((saveErr) => {
                             if (saveErr) {
@@ -534,7 +522,6 @@ app.get('/api/check-session', (req, res) => {
                                 cookieMaxAge: req.session.cookie.maxAge
                             });
                         });
-                    });
                 } else {
                     return res.json({ isAuthenticated: false });
                 }
@@ -574,14 +561,9 @@ app.get('/api/prompts', (req, res) => {
         // Procesar los resultados para convertir la cadena de categorías en un array
         const results = rows.map(row => {
             // Procesar la imagen para asegurarse de que tiene la ruta correcta
-            let imagePath = row.image;
-            if (imagePath && !imagePath.startsWith('http') && !imagePath.startsWith('/')) {
-                imagePath = `/images/${imagePath}`;
-            }
-            
             return {
                 id: row.id,
-                image: imagePath,
+                image: imageHelper.normalizeImagePath(row.image),
                 prompt: row.prompt,
                 created_at: row.created_at,
                 categories: row.categories ? row.categories.split(',') : []
@@ -611,16 +593,10 @@ app.get('/api/prompts/:id', (req, res) => {
             return res.status(404).json({ success: false, message: 'Prompt no encontrado' });
         }
         
-        // Procesar la imagen para asegurarse de que tiene la ruta correcta
-        let imagePath = row.image;
-        if (imagePath && !imagePath.startsWith('http') && !imagePath.startsWith('/')) {
-            imagePath = `/images/${imagePath}`;
-        }
-        
         // Procesar el resultado
         const result = {
             id: row.id,
-            image: imagePath,
+            image: imageHelper.normalizeImagePath(row.image),
             prompt: row.prompt,
             created_at: row.created_at,
             categories: row.categories ? row.categories.split(',') : []
@@ -724,7 +700,7 @@ app.post('/api/prompts', isAuthenticated, upload.single('image'), (req, res) => 
                             prompt: {
                                 id: promptId,
                                 prompt: prompt,
-                                image: `/images/${imagePath}`,
+                                image: imageHelper.normalizeImagePath(imagePath),
                                 categories: categoriesArray || [],
                                 created_at: new Date().toISOString()
                             }
@@ -744,7 +720,7 @@ app.post('/api/prompts', isAuthenticated, upload.single('image'), (req, res) => 
                     prompt: {
                         id: promptId,
                         prompt: prompt,
-                        image: `/images/${imagePath}`,
+                        image: imageHelper.normalizeImagePath(imagePath),
                         categories: [],
                         created_at: new Date().toISOString()
                     }
@@ -1024,7 +1000,30 @@ app.get('/api/diagnostics', (req, res) => {
     });
 });
 
-// Iniciar el servidor
-app.listen(PORT, () => {
-    console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
-});
+// Iniciar el servidor con manejo de errores y puerto alternativo
+function startServer(port) {
+    return app.listen(port, () => {
+        console.log(`Servidor ejecutándose en http://localhost:${port}`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`El puerto ${port} ya está en uso.`);
+            
+            // Si el puerto actual es el predeterminado, intentar con otro puerto
+            if (port === 3000) {
+                const alternativePort = 3001;
+                console.log(`Intentando con puerto alternativo: ${alternativePort}...`);
+                startServer(alternativePort);
+            } else {
+                console.error(`También se intentó con un puerto alternativo pero sigue habiendo problemas.
+Por favor intenta uno de los siguientes:
+1. Ejecutar kill_port_3000.bat para liberar el puerto
+2. Reiniciar el equipo
+3. Usar un puerto diferente explícitamente: 'set PORT=4000 && node server.js'`);
+            }
+        } else {
+            console.error(`Error al iniciar el servidor:`, err);
+        }
+    });
+}
+
+const server = startServer(PORT);

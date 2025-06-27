@@ -265,45 +265,34 @@ function ensureCorrectImagePath(imagePath) {
   }
   
   let processedPath = imagePath;
-  console.log(`Procesando ruta de imagen: "${processedPath}"`);
   
   // Si ya tiene la ruta completa con http, devolverla
   if (processedPath.startsWith('http')) {
-    console.log(`Ruta externa (http): ${processedPath}`);
     return processedPath;
   }
   
   // Si ya viene con la ruta correcta desde el servidor (/images/...), usarla directamente
   if (processedPath.startsWith('/images/')) {
-    console.log(`Ruta correcta del servidor: ${processedPath}`);
     return processedPath;
   }
   
   // Si ya tiene 'images/' al inicio (sin barra), agregarle la barra
   if (processedPath.startsWith('images/')) {
-    const finalPath = `/${processedPath}`;
-    console.log(`Agregando barra inicial: ${finalPath}`);
-    return finalPath;
+    return `/${processedPath}`;
   }
   
   // Verificar si es solo un nombre de archivo (sin directorios)
   if (!processedPath.includes('/') && !processedPath.includes('\\')) {
-    const finalPath = `/images/${processedPath}`;
-    console.log(`Nombre de archivo simple, añadiendo directorio: ${finalPath}`);
-    return finalPath;
+    return `/images/${processedPath}`;
   }
   
   // Verificar si es una ruta relativa de data/images
   if (processedPath.startsWith('data/images/')) {
-    const finalPath = `/${processedPath.substring(5)}`; // Quitar 'data/' del inicio
-    console.log(`Convertida ruta data/images a /images: ${finalPath}`);
-    return finalPath;
+    return `/${processedPath.substring(5)}`; // Quitar 'data/' del inicio
   }
   
   // Para cualquier otro caso, añadir el prefijo '/images/'
-  const finalPath = `/images/${processedPath}`;
-  console.log(`Ruta final normalizada: ${finalPath}`);
-  return finalPath;
+  return `/images/${processedPath}`;
 }
 
 // Función para posicionar un elemento en el layout masonry
