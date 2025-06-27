@@ -109,9 +109,9 @@ try {
 
 // Configura Cloudinary con tus credenciales
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dxhcv6buy',
-  api_key: process.env.CLOUDINARY_API_KEY || '162942145365156',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'I4N-Tqi4dYrlNcamvQmIFymk4l8'
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 // Configura multer para usar Cloudinary
