@@ -111,33 +111,6 @@ function runFullDiagnostic() {
   console.log('=== FIN DEL DIAGNÓSTICO ===');
 }
 
-// Añadir botón de diagnóstico a la página
-function addDiagnosticButton() {
-  const button = document.createElement('button');
-  button.innerText = 'Ejecutar diagnóstico';
-  button.style.position = 'fixed';
-  button.style.bottom = '20px';
-  button.style.right = '20px';
-  button.style.zIndex = '9999';
-  button.style.padding = '10px 15px';
-  button.style.backgroundColor = '#4a90e2';
-  button.style.color = 'white';
-  button.style.border = 'none';
-  button.style.borderRadius = '5px';
-  button.style.cursor = 'pointer';
-  
-  button.onclick = runFullDiagnostic;
-  
-  document.body.appendChild(button);
-}
-
-// Agregar botón cuando la página esté cargada
-window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    addDiagnosticButton();
-  }, 1000);
-});
-
 // Exportar funciones para uso en la consola
 window.diagnostics = {
   checkGallery,
