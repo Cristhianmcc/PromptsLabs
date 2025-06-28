@@ -487,3 +487,20 @@ Para añadir o modificar estos datos de ejemplo, edita el archivo `defaultData.j
 3. **Error de permisos:** Si ves errores relacionados con permisos, verifica los logs de diagnóstico y asegúrate de que los directorios `/data` y `/data/images` tienen los permisos correctos.
 
 4. **Cambios en estructura de datos:** Si modificas la estructura de la base de datos, asegúrate de actualizar todas las consultas SQL en `server.js` y la función `importInitialData()`.
+
+# Instalación de dependencias para subida de imágenes a Cloudinary
+
+Para que la aplicación pueda subir imágenes a Cloudinary y almacenarlas de forma segura y global, instala las siguientes dependencias:
+
+```bash
+npm install cloudinary multer multer-storage-cloudinary
+```
+
+- **cloudinary**: SDK oficial para interactuar con la API de Cloudinary y subir/gestionar imágenes en la nube.
+- **multer**: Middleware de Node.js para manejar formularios con archivos (multipart/form-data). Permite recibir imágenes y otros archivos enviados desde formularios HTML o peticiones API.
+- **multer-storage-cloudinary**: Adaptador que conecta Multer con Cloudinary, permitiendo que los archivos subidos se almacenen directamente en tu cuenta de Cloudinary en vez de en el disco local.
+
+## ¿Qué es Multer?
+Multer es un middleware para Node.js que facilita la recepción y el procesamiento de archivos enviados a través de formularios web o peticiones HTTP. Es ampliamente usado para manejar la subida de imágenes, documentos y otros archivos en aplicaciones Express.
+
+En este proyecto, Multer se usa junto con Cloudinary para que las imágenes subidas por los usuarios se almacenen automáticamente en la nube y no en el servidor local.
